@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
+import '../../common/app_footer.dart';
 
 class EnrollmentScreen extends ConsumerStatefulWidget {
   const EnrollmentScreen({super.key});
@@ -45,18 +46,21 @@ class _EnrollmentScreenState extends ConsumerState<EnrollmentScreen> {
     final lastError = phase is NeedsEnrollment ? phase.lastError : null;
 
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(
-                  'Enroll this device',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        'Enroll this device',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
                 const SizedBox(height: 12),
                 Text(
                   'Run on the server:\n'
@@ -91,16 +95,20 @@ class _EnrollmentScreenState extends ConsumerState<EnrollmentScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  icon: const Icon(Icons.lock_open),
-                  label: Text(_connecting ? 'Connecting…' : 'Connect'),
-                  onPressed: _connecting ? null : _submit,
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        icon: const Icon(Icons.lock_open),
+                        label: Text(_connecting ? 'Connecting…' : 'Connect'),
+                        onPressed: _connecting ? null : _submit,
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          const AppFooter(),
+        ],
       ),
     );
   }

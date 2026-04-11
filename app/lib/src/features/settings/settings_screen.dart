@@ -2,14 +2,65 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../api/update_service.dart';
 import '../../app.dart';
+import '../updates/update_available_dialog.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  String _version = '…';
+  String _build = '';
+  bool _checkingForUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() {
+        _version = info.version;
+        _build = info.buildNumber;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _version = 'dev');
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    setState(() => _checkingForUpdate = true);
+    await ref.read(updateNotifierProvider.notifier).checkNow();
+    if (!mounted) return;
+    setState(() => _checkingForUpdate = false);
+    final info = ref.read(updateNotifierProvider);
+    if (!mounted) return;
+    if (info != null) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => UpdateAvailableDialog(info: info),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are on the latest version.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -63,15 +114,25 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Card(
+          Card(
             child: Column(
               children: <Widget>[
                 ListTile(
-                  title: Text('About'),
-                  subtitle: Text('icd360svpn 0.1.0'),
+                  title: const Text('Version'),
+                  subtitle: Text('icd360svpn $_version (build $_build)'),
+                  trailing: _checkingForUpdate
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : TextButton(
+                          onPressed: _checkForUpdate,
+                          child: const Text('Check for updates'),
+                        ),
                 ),
-                Divider(height: 1),
-                ListTile(
+                const Divider(height: 1),
+                const ListTile(
                   leading: Icon(Icons.link),
                   title: Text('github.com/ICD360S-e-V/vpn'),
                 ),

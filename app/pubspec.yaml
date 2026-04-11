@@ -1,6 +1,10 @@
 name: icd360svpn
 description: macOS / desktop admin app for the ICD360S WireGuard VPN server.
 publish_to: 'none'
+# version: <semver>+<build-number>
+# Bumped on every release. The build-number is monotonic across all
+# semver versions and is what package_info_plus reads at runtime for
+# auto-update comparison.
 version: 0.1.0+1
 
 environment:
@@ -30,6 +34,17 @@ dependencies:
 
   # WireGuard client config QR rendering for the create-peer flow.
   qr_flutter: ^4.1.0
+
+  # Read the bundle's CFBundleShortVersionString / version code at
+  # runtime so the footer + Settings + auto-updater know what we are.
+  package_info_plus: ^8.1.0
+
+  # Locate ~/Downloads so the auto-updater can drop the DMG there.
+  path_provider: ^2.1.5
+
+  # Crypto for SHA256 verification of the downloaded DMG before we
+  # ask Finder to open it.
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:
