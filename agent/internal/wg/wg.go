@@ -42,6 +42,7 @@ type Peer struct {
 	PublicKey       string     `json:"public_key"`
 	PresharedKey    string     `json:"-"` // never returned over the API
 	AllowedIPs      []string   `json:"allowed_ips"`
+	Enabled         bool       `json:"enabled"`
 	CreatedAt       time.Time  `json:"created_at"`
 	CreatedBy       string     `json:"created_by,omitempty"`
 	Endpoint        string     `json:"endpoint,omitempty"`
@@ -207,6 +208,100 @@ func (m *Manager) Add(ctx context.Context, req CreateRequest) (*CreateResult, er
 	return &CreateResult{Peer: peer, ClientConfig: clientConf}, nil
 }
 
+// SetEnabled toggles a peer's enabled flag.
+//
+// When disabled, the [Peer] block stays in wg0.conf (so the keys, IP
+// allocation, and metadata are preserved) but the kernel is updated
+// to remove the peer from the live interface — existing sessions are
+// dropped immediately and new sessions cannot be established. The
+// peer block in wg0.conf is annotated with `# enabled=false`.
+//
+// When re-enabled, the kernel is reconfigured with the original keys
+// and AllowedIPs. The peer can resume the moment the client retries.
+//
+// This is the wg-portal / wg-easy "suspend" pattern: cheaper than
+// revoke + re-issue + redistribute.
+func (m *Manager) SetEnabled(ctx context.Context, pubkey string, enabled bool) error {
+	if strings.TrimSpace(pubkey) == "" {
+		return errors.New("pubkey must not be empty")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	unlock, err := flockExclusive(m.confPath + ".lock")
+	if err != nil {
+		return fmt.Errorf("lock: %w", err)
+	}
+	defer unlock()
+
+	cfg, err := readConfigFile(m.confPath)
+	if err != nil {
+		return fmt.Errorf("read wg0.conf: %w", err)
+	}
+	sec := cfg.findPeer(pubkey)
+	if sec == nil {
+		return ErrPeerNotFound
+	}
+
+	// Persist the new enabled flag in metadata.
+	if enabled {
+		delete(sec.Meta, "enabled")
+	} else {
+		sec.Meta["enabled"] = "false"
+	}
+	if err := writeConfigFile(m.confPath, cfg); err != nil {
+		return fmt.Errorf("write wg0.conf: %w", err)
+	}
+
+	parsedKey, err := wgtypes.ParseKey(pubkey)
+	if err != nil {
+		return fmt.Errorf("parse pubkey: %w", err)
+	}
+
+	if !enabled {
+		// Suspend: drop the peer from the live kernel interface but
+		// keep its [Peer] block in wg0.conf.
+		return m.client.ConfigureDevice(m.iface, wgtypes.Config{
+			ReplacePeers: false,
+			Peers: []wgtypes.PeerConfig{{
+				PublicKey: parsedKey,
+				Remove:    true,
+			}},
+		})
+	}
+
+	// Re-enable: re-add the peer to the kernel from the on-disk config.
+	var psk *wgtypes.Key
+	var allowed []net.IPNet
+	for _, e := range sec.Entries {
+		switch e.Key {
+		case "PresharedKey":
+			k, perr := wgtypes.ParseKey(e.Value)
+			if perr != nil {
+				return fmt.Errorf("parse psk: %w", perr)
+			}
+			psk = &k
+		case "AllowedIPs":
+			for _, addr := range strings.Split(e.Value, ",") {
+				_, ipnet, perr := net.ParseCIDR(strings.TrimSpace(addr))
+				if perr != nil {
+					return fmt.Errorf("parse allowed ip %q: %w", addr, perr)
+				}
+				allowed = append(allowed, *ipnet)
+			}
+		}
+	}
+	return m.client.ConfigureDevice(m.iface, wgtypes.Config{
+		ReplacePeers: false,
+		Peers: []wgtypes.PeerConfig{{
+			PublicKey:         parsedKey,
+			PresharedKey:      psk,
+			ReplaceAllowedIPs: true,
+			AllowedIPs:        allowed,
+		}},
+	})
+}
+
 // Remove deletes the peer with the given public key from wg0.conf and
 // applies the change. Returns ErrPeerNotFound if no such peer exists.
 var ErrPeerNotFound = errors.New("peer not found")
@@ -328,11 +423,19 @@ func mergeConfigAndLive(cfg *rawConfig, live map[string]livePeer) []Peer {
 				}
 			}
 		}
+		// Default to enabled unless explicitly disabled in metadata.
+		// Backward-compat: peers created before M4.3 have no enabled
+		// flag and are treated as enabled.
+		enabled := true
+		if v := s.Meta["enabled"]; v == "false" {
+			enabled = false
+		}
 		p := Peer{
 			Name:         s.Meta["name"],
 			PublicKey:    pub,
 			PresharedKey: psk,
 			AllowedIPs:   allowed,
+			Enabled:      enabled,
 			CreatedBy:    s.Meta["created_by"],
 		}
 		if ts := s.Meta["created_at"]; ts != "" {

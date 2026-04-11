@@ -87,6 +87,50 @@ func (h *handlers) deletePeer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// peerPatchRequest is the body of PATCH /v1/peers/{pubkey}.
+//
+// Currently the only mutable field is `enabled` (suspend / resume).
+// Defined as a pointer so we can distinguish "absent" from "false".
+type peerPatchRequest struct {
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// patchPeer handles PATCH /v1/peers/{pubkey}. Currently supports the
+// `enabled` field; other fields are reserved for later milestones.
+func (h *handlers) patchPeer(w http.ResponseWriter, r *http.Request) {
+	pubkey := r.PathValue("pubkey")
+	if pubkey == "" {
+		writeError(w, http.StatusBadRequest, "missing-pubkey", "path parameter 'pubkey' is required")
+		return
+	}
+	if r.Body == nil {
+		writeError(w, http.StatusBadRequest, "missing-body", "request body is required")
+		return
+	}
+	defer r.Body.Close()
+
+	var req peerPatchRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid-json", err.Error())
+		return
+	}
+
+	if req.Enabled != nil {
+		if err := h.cfg.WG.SetEnabled(r.Context(), pubkey, *req.Enabled); err != nil {
+			if errors.Is(err, wg.ErrPeerNotFound) {
+				writeError(w, http.StatusNotFound, "peer-not-found", "no peer with that public key")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "patch-peer-failed", err.Error())
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // callerCN extracts the CommonName of the verified client cert.
 func callerCN(r *http.Request) string {
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {

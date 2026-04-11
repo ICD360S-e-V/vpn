@@ -48,6 +48,7 @@ func NewServer(cfg Config) (*Server, error) {
 	mux.HandleFunc("GET /v1/health", h.health)
 	mux.HandleFunc("GET /v1/peers", h.listPeers)
 	mux.HandleFunc("POST /v1/peers", h.createPeer)
+	mux.HandleFunc("PATCH /v1/peers/{pubkey}", h.patchPeer)
 	mux.HandleFunc("DELETE /v1/peers/{pubkey}", h.deletePeer)
 
 	tlsCfg := &tls.Config{
