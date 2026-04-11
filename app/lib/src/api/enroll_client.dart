@@ -16,6 +16,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../models/enrollment_bundle.dart';
+import 'user_agent.dart';
 
 const String kEnrollUrl = 'https://vpn.icd360s.de/enroll';
 
@@ -45,6 +46,7 @@ class EnrollClient {
   /// transport / parse failure.
   Future<EnrollmentBundle> exchange(String code) async {
     final body = jsonEncode(<String, String>{'code': code.trim()});
+    final ua = await VpnUserAgent.value();
     final Response<List<int>> resp;
     try {
       resp = await _dio.post<List<int>>(
@@ -64,6 +66,7 @@ class EnrollClient {
           validateStatus: (_) => true,
           headers: <String, String>{
             'Accept': 'application/json',
+            'User-Agent': ua,
           },
         ),
       );

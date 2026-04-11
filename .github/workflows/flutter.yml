@@ -138,6 +138,29 @@ jobs:
           channel: stable
       - uses: ./.github/actions/set-build-number
       - run: flutter create --platforms=macos --project-name icd360svpn --org de.icd360s .
+      - name: Patch macOS entitlements with network.client
+        # Flutter's default macOS Release.entitlements only contains
+        # `com.apple.security.app-sandbox` — NO `network.client`.
+        # That means a sandboxed macOS Flutter app cannot make ANY
+        # outbound network call: Dio's dart:io HttpClient gets
+        # `Failed host lookup: <host>` because the sandbox blocks
+        # the resolver. We MUST add the entitlement explicitly,
+        # otherwise enroll, auto-update, and changelog all silently
+        # fail with DNS errors.
+        #
+        # We patch BOTH Release.entitlements and DebugProfile.entitlements
+        # so `flutter run` from a contributor's machine matches the
+        # CI release behavior. plutil is preinstalled on macos-latest;
+        # `-insert` is idempotent under `|| true` since it only errors
+        # when the key already exists.
+        run: |
+          set -e
+          for f in macos/Runner/Release.entitlements macos/Runner/DebugProfile.entitlements; do
+            echo "patching $f"
+            plutil -insert "com.apple.security.network.client" -bool YES "$f" 2>/dev/null || \
+              echo "  network.client already present"
+            plutil -p "$f"
+          done
       - run: flutter pub get
       - run: flutter build macos --release
 

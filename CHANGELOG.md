@@ -19,6 +19,39 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.1] - 2026-04-11
+
+### Fixed — macOS network sandbox blocked all outbound HTTPS
+- Flutter's default `macos/Runner/Release.entitlements` only contains
+  `com.apple.security.app-sandbox` — NO `network.client`. That meant
+  the sandboxed macOS Flutter app could not make ANY outbound HTTP
+  call: every Dio request died with `Failed host lookup: <host>`
+  because the sandbox blocked the resolver. The build job in
+  `.github/workflows/flutter.yml` now runs `plutil -insert
+  com.apple.security.network.client -bool YES` on both
+  `Release.entitlements` and `DebugProfile.entitlements` immediately
+  after `flutter create --platforms=macos`. Auto-update, enrollment,
+  and the release-notes viewer all work on macOS now.
+- Removed the alphabet hint under the 4-box code entry. The previous
+  text revealed the exact 32-symbol unambiguous alphabet which
+  marginally narrowed an attacker's brute-force keyspace (from
+  ~36^16 to 32^16, ~2 bits less entropy). Defense-in-depth: the
+  filter still rejects everything outside the alphabet, we just no
+  longer print it on screen.
+
+### Added — client User-Agent on every outbound request (M7.6)
+- New `lib/src/api/user_agent.dart` resolves the running version
+  via `package_info_plus` and exposes a single string in the format
+  `icd360sev_client_vpn_management_versiunea_X.Y.Z+B`. Cached after
+  the first call so subsequent requests don't hit PackageInfo.
+- All four Dio call sites (UpdateService, ChangelogService,
+  EnrollClient, ApiClient) now set this header on every request.
+- nginx access log captures `$http_user_agent` by default — grep
+  `/var/log/nginx/access.log` on the server for
+  `icd360sev_client_vpn_management` to see which client + which
+  version is talking to the API. Useful for tracking adoption of
+  new versions across the user base.
+
 ## [1.2.0] - 2026-04-11
 
 ### Added — 4-box enrollment UI + Connect to VPN button (M7.2, M7.4)
@@ -226,6 +259,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
+[1.2.1]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.1...v1.0.2

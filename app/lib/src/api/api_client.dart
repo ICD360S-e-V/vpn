@@ -15,6 +15,7 @@ import '../models/peer.dart';
 import '../models/peer_create_response.dart';
 import '../models/traffic_series.dart';
 import 'mtls_context.dart';
+import 'user_agent.dart';
 
 class ApiClient {
   ApiClient({
@@ -42,7 +43,7 @@ class ApiClient {
         receiveTimeout: const Duration(seconds: 15),
         responseType: ResponseType.json,
         headers: <String, String>{
-          'User-Agent': 'icd360svpn-flutter/0.1',
+          'User-Agent': VpnUserAgent.currentOrFallback(),
           'Accept': 'application/json',
         },
         // We do NOT validate the status code in Dio — the request

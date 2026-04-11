@@ -245,8 +245,8 @@ class _EnrollmentScreenState extends ConsumerState<EnrollmentScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Codul folosește doar literele și cifrele '
-                        '$_kAlphabet (fără 0/O/1/I/L).',
+                        'Doar litere și cifre. Fără spații sau '
+                        'caractere speciale.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

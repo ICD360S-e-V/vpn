@@ -23,6 +23,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/update_info.dart';
+import 'user_agent.dart';
 
 /// URL of the version manifest. Served by nginx on vpn.icd360s.de
 /// (the same server that runs vpn-agent + AdGuard Home, hosted in
@@ -61,12 +62,18 @@ class UpdateService {
   /// app or block startup.
   Future<UpdateInfo?> fetchManifest() async {
     try {
+      // Make sure the User-Agent is resolved before the first
+      // network call so server access logs see the proper
+      // icd360sev_client_vpn_management_versiunea_X.Y.Z+B value
+      // instead of the "_pending" placeholder.
+      final ua = await VpnUserAgent.value();
       final resp = await _dio.get<String>(
         _manifestUrl,
         options: Options(
           responseType: ResponseType.plain,
           receiveTimeout: const Duration(seconds: 10),
           sendTimeout: const Duration(seconds: 5),
+          headers: <String, String>{'User-Agent': ua},
         ),
       );
       if (resp.statusCode == null ||

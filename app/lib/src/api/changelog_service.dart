@@ -22,6 +22,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/changelog_entry.dart';
+import 'user_agent.dart';
 
 const String kChangelogUrl = 'https://vpn.icd360s.de/updates/CHANGELOG.md';
 
@@ -48,6 +49,7 @@ class ChangelogService {
   /// explicit Exception path instead of throwing inside Dio (which
   /// the caller might miscatch).
   Future<List<ChangelogEntry>> fetch() async {
+    final ua = await VpnUserAgent.value();
     final resp = await _dio.get<List<int>>(
       _url,
       options: Options(
@@ -55,6 +57,7 @@ class ChangelogService {
         receiveTimeout: const Duration(seconds: 10),
         sendTimeout: const Duration(seconds: 5),
         validateStatus: (_) => true,
+        headers: <String, String>{'User-Agent': ua},
       ),
     );
     final code = resp.statusCode ?? 0;
