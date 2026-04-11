@@ -44,29 +44,47 @@ permissions:
   contents: write
   pull-requests: write
 
-# googleapis/release-please-action@v4 still ships Node.js 20 internals
-# (same issue we hit with softprops/action-gh-release earlier). Opt
-# into Node.js 24 now via the documented workflow env var so the
-# deprecation warning is silenced and we are pre-emptively ready for
-# the June 2026 cutover.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+# Why we run the release-please NPM CLI directly instead of using
+# googleapis/release-please-action@v4: that action's action.yml still
+# declares `using: node20`, which makes every workflow run print a
+# Node.js 20 deprecation banner even when FORCE_JAVASCRIPT_ACTIONS_TO_NODE24
+# coerces it to actually run on Node 24. GitHub does NOT suppress
+# the banner — the warning appears regardless. The only way to get
+# rid of it is to bypass the action entirely.
+#
+# `setup-node@v5` + `npx release-please` is a clean Node 24 install
+# under our control. Same underlying tool, same configuration, no
+# wrapper.
 
 jobs:
   release-please:
     name: Open / merge release PR
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
-        id: release
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+      - uses: actions/checkout@v6
 
-      - name: Show outputs
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Run release-please manifest-pr (open / update Release PR)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "release_created=${{ steps.release.outputs.release_created }}"
-          echo "tag_name=${{ steps.release.outputs.tag_name }}"
-          echo "version=${{ steps.release.outputs.version }}"
-          echo "pr=${{ steps.release.outputs.pr }}"
+          set -e
+          npx --yes release-please@latest manifest-pr \
+            --token="$GITHUB_TOKEN" \
+            --repo-url="$GITHUB_REPOSITORY" \
+            --config-file=release-please-config.json \
+            --manifest-file=.release-please-manifest.json
+
+      - name: Run release-please manifest-release (cut tag + GitHub Release on PR merge)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          npx --yes release-please@latest manifest-release \
+            --token="$GITHUB_TOKEN" \
+            --repo-url="$GITHUB_REPOSITORY" \
+            --config-file=release-please-config.json \
+            --manifest-file=.release-please-manifest.json
