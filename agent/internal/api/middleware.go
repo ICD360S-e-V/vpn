@@ -60,3 +60,30 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 		slog.Error("write json", "err", err)
 	}
 }
+
+// problemDetails follows RFC 7807. Simplified for our needs.
+type problemDetails struct {
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Status int    `json:"status"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// writeError emits a JSON error response. The 'kind' becomes the
+// suffix of the type URL so machines can distinguish problem classes
+// without parsing the human-readable title.
+func writeError(w http.ResponseWriter, status int, kind, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	pd := problemDetails{
+		Type:   "/problems/" + kind,
+		Title:  http.StatusText(status),
+		Status: status,
+		Detail: detail,
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(pd); err != nil {
+		slog.Error("write error", "err", err)
+	}
+}

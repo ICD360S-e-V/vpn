@@ -181,16 +181,16 @@ components:
 
     PeerCreateResponse:
       type: object
-      required: [peer, client_config, qr_png_base64]
+      required: [peer, client_config]
       properties:
         peer: { $ref: '#/components/schemas/Peer' }
         client_config:
           type: string
-          description: "Rendered WireGuard .conf file ready to import"
-        qr_png_base64:
-          type: string
-          format: byte
-          description: "PNG of the QR code, base64-encoded"
+          description: |
+            Rendered WireGuard .conf file ready to import. The macOS app
+            renders the QR code locally with CoreImage instead of asking
+            the agent to do it — keeps the agent dependency-free and
+            avoids shipping the same PNG twice.
 
     Connection:
       type: object

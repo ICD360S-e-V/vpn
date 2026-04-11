@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ICD360S-e-V/vpn/agent/internal/mtls"
+	"github.com/ICD360S-e-V/vpn/agent/internal/wg"
 )
 
 // Config carries everything NewServer needs. Built once in main and
@@ -23,6 +24,7 @@ type Config struct {
 	AdGuardPass string
 	CA          *mtls.CA
 	ServerCert  tls.Certificate
+	WG          *wg.Manager
 	Version     string
 	Started     time.Time
 }
@@ -44,6 +46,9 @@ func NewServer(cfg Config) (*Server, error) {
 	// 2. Register it here.
 	// 3. Update proto/openapi.yaml.
 	mux.HandleFunc("GET /v1/health", h.health)
+	mux.HandleFunc("GET /v1/peers", h.listPeers)
+	mux.HandleFunc("POST /v1/peers", h.createPeer)
+	mux.HandleFunc("DELETE /v1/peers/{pubkey}", h.deletePeer)
 
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{cfg.ServerCert},

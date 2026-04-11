@@ -26,6 +26,7 @@ import (
 
 	"github.com/ICD360S-e-V/vpn/agent/internal/api"
 	"github.com/ICD360S-e-V/vpn/agent/internal/mtls"
+	"github.com/ICD360S-e-V/vpn/agent/internal/wg"
 )
 
 // version is overridden at build time via -ldflags '-X main.version=...'.
@@ -79,6 +80,12 @@ func cmdServe(args []string) {
 		"directory holding the CA + server cert + key")
 	wgIface := fs.String("wg-interface", "wg0",
 		"WireGuard interface to monitor")
+	wgConfig := fs.String("wg-config", "/etc/wireguard/wg0.conf",
+		"path to the WireGuard server config file")
+	wgSubnet := fs.String("wg-subnet", "10.8.0.0/24",
+		"CIDR of the VPN client subnet")
+	publicEnd := fs.String("public-endpoint", "vpn.icd360s.de:443",
+		"public endpoint clients should dial in their .conf")
 	adguardURL := fs.String("adguard-url", "http://10.8.0.1:3000",
 		"AdGuard Home base URL")
 	adguardUser := fs.String("adguard-user", "admin",
@@ -108,6 +115,12 @@ func cmdServe(args []string) {
 		os.Exit(1)
 	}
 
+	wgMgr, err := wg.NewManager(*wgConfig, *wgIface, *wgSubnet, *publicEnd)
+	if err != nil {
+		slog.Error("wg manager setup failed", "err", err)
+		os.Exit(1)
+	}
+
 	srv, err := api.NewServer(api.Config{
 		Listen:      *listenAddr,
 		WGInterface: *wgIface,
@@ -116,6 +129,7 @@ func cmdServe(args []string) {
 		AdGuardPass: *adguardPass,
 		CA:          ca,
 		ServerCert:  serverCert,
+		WG:          wgMgr,
 		Version:     version,
 		Started:     time.Now(),
 	})
@@ -132,6 +146,9 @@ func cmdServe(args []string) {
 		"listen", *listenAddr,
 		"version", version,
 		"wg_interface", *wgIface,
+		"wg_config", *wgConfig,
+		"wg_subnet", *wgSubnet,
+		"public_endpoint", *publicEnd,
 		"adguard_url", *adguardURL,
 	)
 	if err := srv.Run(ctx); err != nil {

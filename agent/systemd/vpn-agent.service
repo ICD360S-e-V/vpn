@@ -33,10 +33,10 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources @mount @reboot @swap @raw-io
 
-# State directories the agent is allowed to write to
-ReadWritePaths=/etc/vpn-agent /var/lib/vpn-agent
-# M1: only reads /etc/wireguard. M2 will need RW here for peer mutation.
-ReadOnlyPaths=/etc/wireguard
+# State directories the agent is allowed to write to.
+# M2: /etc/wireguard is now RW because the agent mutates wg0.conf when
+# peers are added or removed via the API.
+ReadWritePaths=/etc/vpn-agent /var/lib/vpn-agent /etc/wireguard
 
 # Capabilities — keep minimal
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_ADMIN
