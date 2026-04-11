@@ -16,6 +16,8 @@
 // which gets rsynced to the nginx vhost on vpn.icd360s.de.
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,22 +38,39 @@ class ChangelogService {
   /// versions newest-first (matching the order in CHANGELOG.md).
   /// Throws on any failure — caller decides whether to surface an
   /// error UI or fall back silently.
+  ///
+  /// Why ResponseType.bytes instead of plain: nginx serves `.md` with
+  /// `Content-Type: application/octet-stream` because the default
+  /// mime.types ships no entry for markdown. Dio's plain decoder
+  /// stalls on binary content types in some configurations rather
+  /// than just utf8-decoding regardless. We sidestep that by
+  /// explicitly reading bytes and decoding utf8 ourselves, plus
+  /// `validateStatus: (_) => true` so non-2xx responses raise an
+  /// explicit Exception path instead of throwing inside Dio (which
+  /// the caller might miscatch).
   Future<List<ChangelogEntry>> fetch() async {
-    final resp = await _dio.get<String>(
+    final resp = await _dio.get<List<int>>(
       _url,
       options: Options(
-        responseType: ResponseType.plain,
+        responseType: ResponseType.bytes,
         receiveTimeout: const Duration(seconds: 10),
         sendTimeout: const Duration(seconds: 5),
+        validateStatus: (_) => true,
       ),
     );
-    if (resp.statusCode == null ||
-        resp.statusCode! < 200 ||
-        resp.statusCode! >= 300 ||
-        resp.data == null) {
-      throw Exception('changelog fetch failed: ${resp.statusCode}');
+    final code = resp.statusCode ?? 0;
+    if (code < 200 || code >= 300) {
+      throw Exception('changelog fetch failed: HTTP $code');
     }
-    return parse(resp.data!);
+    final bytes = resp.data;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('changelog fetch returned empty body');
+    }
+    final body = utf8.decode(
+      bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+      allowMalformed: true,
+    );
+    return parse(body);
   }
 
   /// Parses Keep a Changelog formatted markdown into a list of

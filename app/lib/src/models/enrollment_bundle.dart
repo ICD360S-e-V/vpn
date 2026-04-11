@@ -1,17 +1,18 @@
 // ICD360SVPN — lib/src/models/enrollment_bundle.dart
 //
-// Decodes the single base64 string produced by
-// `vpn-agent issue-bundle <name>` into the cert + key + CA + URL the
-// app needs to enroll. The encoding chain is:
+// Wire format of the JSON body returned by `POST /v1/enroll` (and
+// reverse-proxied as `https://vpn.icd360s.de/enroll`). The server
+// produces this in `agent/cmd/vpn-agent/main.go::cmdIssueCode` —
+// version 2 of the bundle includes the WireGuard peer config alongside
+// the mTLS PEMs so the app can bring up its own tunnel without the
+// user importing peer1.conf into a separate WireGuard.app first.
 //
-//     base64 -> gzip -> json -> EnrollmentBundle
-//
-// All whitespace is stripped from the input before decoding so the
-// blob can be pasted from terminals, emails, or wrapped runbooks
-// without surprising the parser.
+// Until M7.1 the bundle was base64-gzip-json packed into a single
+// 1500-char paste. M7.1 replaced that with a 16-char short code that
+// the app exchanges for THIS structure over plain HTTPS — so we now
+// just decode raw JSON.
 
 import 'dart:convert';
-import 'dart:io' show gzip;
 
 import 'package:flutter/foundation.dart';
 
@@ -32,6 +33,9 @@ class EnrollmentBundle {
     required this.certPem,
     required this.keyPem,
     required this.caPem,
+    required this.wireguardConfig,
+    required this.wireguardPublicKey,
+    required this.wireguardAddress,
   });
 
   final int version;
@@ -42,44 +46,52 @@ class EnrollmentBundle {
   final String keyPem;
   final String caPem;
 
+  /// Rendered .conf body for the WireGuard tunnel — direct
+  /// `wg-quick`/WireGuard.app input. Contains the client private key,
+  /// PSK, allocated /32 address, and the public endpoint.
+  final String wireguardConfig;
+
+  /// Public key of THIS device's WireGuard peer (used for revoke
+  /// later from the admin app).
+  final String wireguardPublicKey;
+
+  /// CIDR allocated to this device, e.g. `10.8.0.7/32`.
+  final String wireguardAddress;
+
   /// Highest bundle wire version this build understands. Bumping
   /// this on the agent side without bumping the app gives a clean
   /// "please update the app" error rather than a silent crash.
-  static const int supportedVersion = 1;
+  static const int supportedVersion = 2;
 
-  /// Decode a pasted enrollment string. Throws
-  /// [EnrollmentBundleException] on any failure (bad base64, bad gzip,
-  /// bad JSON, missing field, unsupported version).
-  factory EnrollmentBundle.parse(String input) {
-    final cleaned = input.replaceAll(RegExp(r'\s+'), '');
-    if (cleaned.isEmpty) {
-      throw EnrollmentBundleException('empty input');
+  /// Decode the JSON body returned by POST /v1/enroll. Throws
+  /// [EnrollmentBundleException] on any failure.
+  factory EnrollmentBundle.fromBytes(List<int> bytes) {
+    if (bytes.isEmpty) {
+      throw EnrollmentBundleException('empty response body');
     }
-
-    final List<int> gzBytes;
+    final String text;
     try {
-      gzBytes = base64.decode(cleaned);
+      text = utf8.decode(bytes, allowMalformed: false);
     } catch (e) {
-      throw EnrollmentBundleException('not valid base64: $e');
+      throw EnrollmentBundleException('not valid utf-8: $e');
     }
+    return EnrollmentBundle.fromJsonString(text);
+  }
 
-    final List<int> jsonBytes;
-    try {
-      jsonBytes = gzip.decode(gzBytes);
-    } catch (e) {
-      throw EnrollmentBundleException('gzip decode failed: $e');
-    }
-
+  factory EnrollmentBundle.fromJsonString(String text) {
     final dynamic decoded;
     try {
-      decoded = jsonDecode(utf8.decode(jsonBytes));
+      decoded = jsonDecode(text);
     } catch (e) {
       throw EnrollmentBundleException('json decode failed: $e');
     }
     if (decoded is! Map<String, dynamic>) {
       throw EnrollmentBundleException('json root is not an object');
     }
+    return EnrollmentBundle.fromJson(decoded);
+  }
 
+  factory EnrollmentBundle.fromJson(Map<String, dynamic> decoded) {
     final version = decoded['version'];
     if (version is! int) {
       throw EnrollmentBundleException('missing or non-int version');
@@ -90,7 +102,6 @@ class EnrollmentBundle {
         '($supportedVersion). Please update the app.',
       );
     }
-
     return EnrollmentBundle(
       version: version,
       name: decoded['name'] as String? ?? '',
@@ -101,6 +112,9 @@ class EnrollmentBundle {
       certPem: decoded['cert_pem'] as String? ?? '',
       keyPem: decoded['key_pem'] as String? ?? '',
       caPem: decoded['ca_pem'] as String? ?? '',
+      wireguardConfig: decoded['wireguard_config'] as String? ?? '',
+      wireguardPublicKey: decoded['wireguard_public_key'] as String? ?? '',
+      wireguardAddress: decoded['wireguard_address'] as String? ?? '',
     );
   }
 }

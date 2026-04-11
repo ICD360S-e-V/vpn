@@ -13,7 +13,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/api_client.dart';
+import '../../api/secure_store.dart';
 import '../../api/update_service.dart';
+import '../../api/vpn_tunnel.dart';
+import '../../app.dart';
 import '../../common/app_footer.dart';
 import '../health/health_screen.dart';
 import '../peers/peers_screen.dart';
@@ -31,6 +34,47 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _selected = 0;
+  bool _connecting = false;
+
+  Future<void> _connectVpn() async {
+    if (_connecting) return;
+    setState(() => _connecting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final store = ref.read(secureStoreProvider);
+      final identity = await store.loadIdentity();
+      if (identity == null || !identity.hasWireguard) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nu există un tunnel WireGuard salvat. '
+              'Re-enroll cu un cod nou ca să primești unul.',
+            ),
+          ),
+        );
+        return;
+      }
+      final path = await VpnTunnel.importTunnel(
+        wgConfig: identity.wgConfig,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text(
+            'Tunnel salvat la $path. WireGuard ar trebui să-l '
+            'preia automat — confirmă importul în fereastra '
+            'WireGuard, apoi activează switch-ul.',
+          ),
+        ),
+      );
+    } on VpnTunnelException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Eroare: $e')));
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +87,20 @@ class _MainShellState extends ConsumerState<MainShell> {
     final updateInfo = ref.watch(updateNotifierProvider);
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _connecting ? null : _connectVpn,
+        icon: _connecting
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.vpn_lock),
+        label: Text(_connecting ? 'Se importă…' : 'Connect to VPN'),
+      ),
       body: Column(
         children: <Widget>[
           if (updateInfo != null)

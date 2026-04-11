@@ -36,27 +36,41 @@ class SecureStore {
   static const String _kCaPem = 'icd360svpn.ca_pem';
   static const String _kAgentUrl = 'icd360svpn.agent_url';
   static const String _kIdentityName = 'icd360svpn.identity_name';
+  // M7.2: WireGuard fields. Store the full .conf body (already
+  // rendered by the agent) plus the public key + allocated CIDR so
+  // the Connect button knows what to import / disconnect.
+  static const String _kWgConfig = 'icd360svpn.wg_config';
+  static const String _kWgPublicKey = 'icd360svpn.wg_public_key';
+  static const String _kWgAddress = 'icd360svpn.wg_address';
 
-  /// Persist all four enrollment fields atomically (best-effort —
-  /// flutter_secure_storage doesn't expose a transaction so we just
-  /// write them in order; if the second one fails the first is left
-  /// behind, which is fine because we always overwrite on next save).
+  /// Persist all enrollment fields. Best-effort — flutter_secure_storage
+  /// has no transaction so we just write in order; if a later write
+  /// fails, the partial state is fine because we always overwrite on
+  /// next save.
   Future<void> saveIdentity({
     required String certPem,
     required String keyPem,
     required String caPem,
     required String agentUrl,
     required String identityName,
+    String wgConfig = '',
+    String wgPublicKey = '',
+    String wgAddress = '',
   }) async {
     await _storage.write(key: _kCertPem, value: certPem);
     await _storage.write(key: _kKeyPem, value: keyPem);
     await _storage.write(key: _kCaPem, value: caPem);
     await _storage.write(key: _kAgentUrl, value: agentUrl);
     await _storage.write(key: _kIdentityName, value: identityName);
+    await _storage.write(key: _kWgConfig, value: wgConfig);
+    await _storage.write(key: _kWgPublicKey, value: wgPublicKey);
+    await _storage.write(key: _kWgAddress, value: wgAddress);
   }
 
   /// Returns the saved identity, or null if any of the four required
-  /// fields is missing (treated as "no enrollment yet").
+  /// mTLS fields is missing (treated as "no enrollment yet"). The
+  /// WireGuard fields are optional — older bundles (pre-M7.1) had
+  /// none and we still want those identities to load.
   Future<StoredIdentity?> loadIdentity() async {
     final cert = await _storage.read(key: _kCertPem);
     final key = await _storage.read(key: _kKeyPem);
@@ -66,12 +80,18 @@ class SecureStore {
       return null;
     }
     final name = await _storage.read(key: _kIdentityName) ?? '';
+    final wgConfig = await _storage.read(key: _kWgConfig) ?? '';
+    final wgPub = await _storage.read(key: _kWgPublicKey) ?? '';
+    final wgAddr = await _storage.read(key: _kWgAddress) ?? '';
     return StoredIdentity(
       certPem: cert,
       keyPem: key,
       caPem: ca,
       agentUrl: url,
       identityName: name,
+      wgConfig: wgConfig,
+      wgPublicKey: wgPub,
+      wgAddress: wgAddr,
     );
   }
 
@@ -82,6 +102,9 @@ class SecureStore {
     await _storage.delete(key: _kCaPem);
     await _storage.delete(key: _kAgentUrl);
     await _storage.delete(key: _kIdentityName);
+    await _storage.delete(key: _kWgConfig);
+    await _storage.delete(key: _kWgPublicKey);
+    await _storage.delete(key: _kWgAddress);
   }
 }
 
@@ -92,6 +115,9 @@ class StoredIdentity {
     required this.caPem,
     required this.agentUrl,
     required this.identityName,
+    this.wgConfig = '',
+    this.wgPublicKey = '',
+    this.wgAddress = '',
   });
 
   final String certPem;
@@ -99,4 +125,11 @@ class StoredIdentity {
   final String caPem;
   final String agentUrl;
   final String identityName;
+
+  /// Rendered WireGuard .conf body (M7.2). Empty for pre-M7.1 enrolls.
+  final String wgConfig;
+  final String wgPublicKey;
+  final String wgAddress;
+
+  bool get hasWireguard => wgConfig.isNotEmpty;
 }

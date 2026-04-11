@@ -8,11 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api/api_client.dart';
+import 'api/enroll_client.dart';
 import 'api/secure_store.dart';
 import 'features/enrollment/enrollment_screen.dart';
 import 'features/main/error_screen.dart';
 import 'features/main/main_shell.dart';
-import 'models/enrollment_bundle.dart';
 
 // ---------------------------------------------------------------
 // Lifecycle phases
@@ -95,16 +95,23 @@ class AppPhaseController extends Notifier<AppPhase> {
     }
   }
 
-  Future<void> enrollFromBundleString(String pasted) async {
+  /// M7.2: exchange a 16-char short code for a v2 enrollment bundle.
+  /// On success, persists the cert + WG config and flips state to
+  /// Connected. On any failure, flips back to NeedsEnrollment with
+  /// the friendly error message from EnrollClient.
+  Future<void> enrollFromCode(String code) async {
     state = const Connecting();
     try {
-      final bundle = EnrollmentBundle.parse(pasted);
+      final bundle = await EnrollClient().exchange(code);
       await _store.saveIdentity(
         certPem: bundle.certPem,
         keyPem: bundle.keyPem,
         caPem: bundle.caPem,
         agentUrl: bundle.agentUrl,
         identityName: bundle.name,
+        wgConfig: bundle.wireguardConfig,
+        wgPublicKey: bundle.wireguardPublicKey,
+        wgAddress: bundle.wireguardAddress,
       );
       final client = ApiClient(
         baseUrl: bundle.agentUrl,

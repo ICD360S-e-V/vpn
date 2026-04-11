@@ -75,7 +75,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: Text(
                     'Logging out clears the cert from the OS keychain. '
                     'You will need to enroll again with a fresh '
-                    'vpn-agent issue-bundle output.',
+                    'vpn-agent issue-code output.',
                   ),
                 ),
                 const Divider(height: 1),
