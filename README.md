@@ -56,7 +56,10 @@ Changelog entries are auto-generated from commit messages.
 
 ## License
 
-All rights reserved by **ICD360S e.V.** (`icd360s.de`). The source
-is published for transparency and security review; no license is
-granted for redistribution, modification, or commercial use without
-prior written agreement.
+[MIT](LICENSE) © 2026 ICD360S e.V.
+
+The source is freely usable, modifiable, and redistributable under
+the MIT license. Note that the **service** itself
+(`vpn.icd360s.de`) requires a per-device enrollment code issued
+out-of-band by an admin — anyone can build the app, but only
+users with a valid code can connect to the production server.

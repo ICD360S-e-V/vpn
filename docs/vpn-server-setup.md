@@ -212,8 +212,10 @@ If the GitHub secret leaks:
 ssh-keygen -t ed25519 -a 100 -N '' -f vpn-deploy.key.new \
   -C 'github-actions@icd360s-vpn (rotated YYYY-MM-DD)'
 
-# 2. Replace authorized_keys on vpn.icd360s.de
-ssh root@vpn.icd360s.de "
+# 2. Replace authorized_keys on vpn.icd360s.de.
+#    Root SSH login is disabled (PermitRootLogin no), so we go via
+#    a sudo-capable account on the non-default SSH port.
+ssh -p 36000 admin-user@vpn.icd360s.de "
   sudo bash -c 'cat > /home/vpn-deploy/.ssh/authorized_keys' <<EOF
 command=\"/usr/local/bin/rrsync -wo /var/www/html\",no-pty,no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc,restrict $(cat vpn-deploy.key.new.pub)
 EOF"
