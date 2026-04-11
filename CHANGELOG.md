@@ -19,6 +19,56 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.4] - 2026-04-11
+
+### Fixed — replace flutter_secure_storage with file-backed storage
+- Even with `app-sandbox = false` shipped in v1.2.3, the
+  `flutter_secure_storage` macOS plugin still hit
+  `errSecMissingEntitlement -34018` because the package's Keychain
+  path requires `keychain-access-groups` regardless of sandbox state,
+  and `keychain-access-groups` requires a valid Apple Team ID prefix
+  that we don't have (no Apple Developer Program membership).
+  Documented in juliansteenbakker/flutter_secure_storage#804.
+- Drop the `flutter_secure_storage` dependency entirely. Replace
+  with a tiny file-backed JSON store at
+  `~/Library/Application Support/de.icd360s.icd360svpn/identity.json`
+  on macOS (equivalents on each OS via `path_provider`'s
+  `getApplicationSupportDirectory`). The file is created with
+  POSIX mode `0600` and the parent dir with `0700`. Atomic write
+  via `.tmp` + rename. Cross-platform identical, zero plugin
+  quirks, zero entitlement gymnastics.
+- Threat model justification: the user IS the admin who installed
+  the app on their own machine. Anything able to read this file
+  already has full Keychain access too — the OS Keychain provides
+  zero additional defense in this scenario, and the entitlement
+  pain to use it is unbounded.
+
+### Added — real macOS auto-update + footer Check Updates button (M7.8)
+- New `lib/src/api/macos_updater.dart` performs a real self-update:
+  mounts the downloaded DMG with `hdiutil`, `ditto`s the new .app
+  to a per-update temp staging directory, unmounts the DMG, writes
+  a small detached bash helper that polls until the parent process
+  exits and then atomically replaces `/Applications/icd360svpn.app`
+  via `ditto`, strips the Gatekeeper quarantine xattr, and `open`s
+  the new .app. The parent app `exit(0)`s while the helper waits.
+  Works for any app installed under `/Applications`. No Sparkle,
+  no Apple Developer Program, no manual drag-drop.
+- `update_service.dart::launchInstaller` now uses `MacosUpdater` on
+  macOS and falls back to `open <DMG>` (the old manual flow) if
+  the app is NOT in `/Applications` or the helper fails.
+- New compact icon button in the footer next to the version label
+  that triggers an on-demand version.json poll. Up-to-date → green
+  snackbar. Update available → opens UpdateAvailableDialog. Errors
+  → friendly Romanian snackbar.
+
+### Added — CI verification of baked .app entitlements
+- New step in `build_macos` runs
+  `codesign -d --entitlements - build/macos/Build/Products/Release/icd360svpn.app`
+  after `flutter build macos --release` and HARD FAILS the build
+  if `app-sandbox` is somehow still `<true/>` in the signed binary.
+  Catches future regressions where the entitlements file edit
+  doesn't propagate through the Xcode build pipeline.
+
 ## [1.2.3] - 2026-04-11
 
 ### Fixed — drop macOS sandbox entirely (errSecMissingEntitlement -34018)
@@ -320,6 +370,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
+[1.2.4]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.0...v1.2.1

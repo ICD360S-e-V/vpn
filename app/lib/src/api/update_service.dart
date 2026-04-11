@@ -23,6 +23,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/update_info.dart';
+import 'macos_updater.dart';
 import 'user_agent.dart';
 
 /// URL of the version manifest. Served by nginx on vpn.icd360s.de
@@ -150,20 +151,35 @@ class UpdateService {
     return dest;
   }
 
-  /// Asks the OS to open the freshly-downloaded installer in Finder /
-  /// File Explorer / xdg-open. The OS-native installer experience
-  /// takes over from here:
+  /// Hands the freshly-downloaded installer off to the OS, or, on
+  /// macOS, performs a real self-update via [MacosUpdater] if the
+  /// app is installed in /Applications.
   ///
-  ///   - macOS: `open` mounts the DMG and shows the .app to drag.
+  ///   - macOS: mount the DMG, ditto the new .app to a staging dir,
+  ///     spawn a detached helper script that waits for this process
+  ///     to exit and then atomically replaces /Applications/icd360svpn.app
+  ///     and relaunches. Caller does not return — the process exits
+  ///     before the future completes. If the app is NOT in
+  ///     /Applications (e.g. running from a DMG), falls back to
+  ///     `open <DMG>` so the user can drag-install manually.
   ///   - Linux: opens the .deb / .AppImage with the default handler.
   ///   - Windows: launches the .msi installer.
-  ///
-  /// Returns the [Process] so the caller can wait for it to launch
-  /// (we don't wait for the installer GUI to finish — that would
-  /// block forever).
   Future<void> launchInstaller(String path) async {
     if (Platform.isMacOS) {
-      await Process.start('open', <String>[path]);
+      try {
+        // performSelfUpdate exits the process on success and never
+        // returns. It only returns control if it threw before the
+        // exit point (e.g. app is not in /Applications).
+        await MacosUpdater.performSelfUpdate(path);
+      } on MacosUpdaterException {
+        // Fallback to the legacy "open in Finder, drag manually" flow
+        // when self-update is not possible (running from a DMG, app
+        // not in /Applications, no write access). The exception's
+        // message is surfaced to the caller via rethrow so the UI
+        // can explain why the manual flow is happening.
+        await Process.start('open', <String>[path]);
+        rethrow;
+      }
     } else if (Platform.isLinux) {
       await Process.start('xdg-open', <String>[path]);
     } else if (Platform.isWindows) {

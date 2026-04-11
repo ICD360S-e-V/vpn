@@ -64,46 +64,60 @@ class _UpdateAvailableDialogState extends ConsumerState<UpdateAvailableDialog> {
       return;
     }
 
-    // Hand off to the OS-native installer flow.
+    // Hand off. On macOS this performs a real self-update via
+    // MacosUpdater (mount DMG → ditto → spawn detached helper →
+    // exit) and NEVER RETURNS — the process is gone before the
+    // future completes. On Linux/Windows it opens the .deb / .msi
+    // with the OS handler. The fallback path (running from a DMG,
+    // app not in /Applications) rethrows after opening Finder.
     try {
       await svc.launchInstaller(dlPath);
+      // If we reach this line on macOS, the self-update did NOT
+      // execute (the helper script didn't fire) but no exception
+      // was thrown either. Treat as "manual flow needed".
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Could not open installer: $e';
+        _errorMessage =
+            'Auto-update unavailable, falling back to manual: $e';
       });
+      // Manual fallback path: tell the user to drag-install.
+      _showManualFallbackDialog(svc);
       return;
     }
 
-    // Confirm with the user before quitting so they don't lose the
-    // running session unexpectedly.
+    // Linux/Windows path or macOS fallback: confirm before quit.
     if (!mounted) return;
-    final shouldQuit = await showDialog<bool>(
+    _showManualFallbackDialog(svc);
+  }
+
+  void _showManualFallbackDialog(UpdateService svc) {
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Installer ready'),
         content: const Text(
-          'The new version has been opened in Finder. Drag it to '
-          'Applications (replacing the old copy), then click "Quit Now" '
-          'so the new app can launch cleanly.',
+          'The new version is open in Finder / your file manager. '
+          'Drag it over the old copy in Applications, then click '
+          '"Quit Now" so the new app can launch cleanly.',
         ),
         actions: <Widget>[
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Stay open'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              Navigator.pop(ctx);
+              svc.quitApp();
+            },
             child: const Text('Quit Now'),
           ),
         ],
       ),
     );
-    if (shouldQuit == true) {
-      svc.quitApp();
-    }
   }
 
   String _filenameFor(String platform, String version) {

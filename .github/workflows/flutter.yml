@@ -204,6 +204,25 @@ jobs:
       - run: flutter pub get
       - run: flutter build macos --release
 
+      - name: Verify built .app entitlements
+        # Diagnostic: dump the entitlements that codesign actually
+        # baked into the .app. If our entitlements file edit didn't
+        # propagate (because of build pipeline weirdness), we want
+        # to find out HERE — at build time — instead of shipping a
+        # broken DMG and hearing about it from the user.
+        run: |
+          set -e
+          APP="build/macos/Build/Products/Release/icd360svpn.app"
+          echo "--- baked entitlements (codesign -d --entitlements -) ---"
+          /usr/bin/codesign -d --entitlements - "$APP" 2>&1 || true
+          echo "--- end ---"
+          # Hard fail if app-sandbox somehow ended up TRUE in the
+          # signed binary even though we set it FALSE in the file.
+          if /usr/bin/codesign -d --entitlements - "$APP" 2>&1 | grep -A1 'app-sandbox' | grep -q '<true/>'; then
+            echo "::error::app-sandbox is still true in the signed .app"
+            exit 1
+          fi
+
       - name: Read version
         id: ver
         run: |

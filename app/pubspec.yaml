@@ -8,7 +8,7 @@ publish_to: 'none'
 # this line just before `flutter build` runs in each platform job.
 # Local `flutter run` will use build number 0 (default), which is fine
 # for development — only release builds need the monotonic value.
-version: 1.2.3 # x-release-please-version
+version: 1.2.4 # x-release-please-version
 
 environment:
   sdk: '>=3.7.0 <4.0.0'
@@ -26,11 +26,6 @@ dependencies:
   # round. Free async caching, dispose semantics, no boilerplate at
   # this scale.
   flutter_riverpod: ^3.0.0
-
-  # Cross-platform secure key/value storage. Backed by Keychain on
-  # macOS/iOS, libsecret on Linux, DPAPI on Windows, Keystore on
-  # Android. Stores the three PEMs from the enrollment bundle.
-  flutter_secure_storage: ^10.0.0
 
   # Bandwidth time-series visualization for /v1/peers/{pubkey}/bandwidth.
   fl_chart: ^0.70.0
