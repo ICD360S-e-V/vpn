@@ -14,16 +14,16 @@ on:
       - '.github/workflows/flutter.yml'
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: app
-
-env:
-  # Force every JavaScript action to run on Node.js 24 even if its
-  # manifest still declares "node20" (actions/upload-artifact@v5 is
-  # the current culprit). Drops a no-op once Node 24 becomes the
-  # GHA default in June 2026.
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+# Action versions notes (M6.5):
+#   actions/checkout@v6           ships node24 natively
+#   actions/setup-java@v5         ships node24 natively
+#   actions/upload-artifact@v7    ships node24 natively
+#   actions/download-artifact@v8  ships node24 natively
+#   subosito/flutter-action@v2    composite action, no node runtime
+#   softprops/action-gh-release@v2 ships node24 natively
+# After bumping all of the above to their node24-native lines, the
+# FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 env var is no longer needed —
+# every job genuinely runs on Node 24.
 
 jobs:
   # ─────────────────────────────────────────────────────────────
@@ -32,8 +32,11 @@ jobs:
   analyze:
     name: Analyze (ubuntu)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -51,8 +54,11 @@ jobs:
     name: Build Linux (deb + bundle)
     runs-on: ubuntu-latest
     needs: analyze
+    defaults:
+      run:
+        working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install Linux build deps
         run: |
           sudo apt-get update
@@ -110,18 +116,20 @@ jobs:
           EOF
           dpkg-deb --build "$STAGE" "icd360svpn-${VERSION}-amd64.deb"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
-          path: |
-            app/icd360svpn-*-amd64.deb
+          path: app/icd360svpn-*-amd64.deb
 
   build_macos:
     name: Build macOS (.dmg)
     runs-on: macos-latest
     needs: analyze
+    defaults:
+      run:
+        working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -153,7 +161,7 @@ jobs:
             "icd360svpn-${VERSION}.dmg" \
             "$APP"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: app/icd360svpn-*.dmg
@@ -162,8 +170,11 @@ jobs:
     name: Build Windows (.zip)
     runs-on: windows-latest
     needs: analyze
+    defaults:
+      run:
+        working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -186,7 +197,7 @@ jobs:
             -Path build/windows/x64/runner/Release/* `
             -DestinationPath "icd360svpn-$version-windows-x64.zip"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: app/icd360svpn-*-windows-x64.zip
@@ -195,8 +206,11 @@ jobs:
     name: Build Android (APK + AAB)
     runs-on: ubuntu-latest
     needs: analyze
+    defaults:
+      run:
+        working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -238,7 +252,7 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab \
              "android-out/icd360svpn-${V}.aab"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: app/android-out/
@@ -247,26 +261,45 @@ jobs:
     name: Build iOS (.app, unsigned)
     runs-on: macos-latest
     needs: analyze
+    defaults:
+      run:
+        working-directory: app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
       - run: flutter create --platforms=ios --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
-      - uses: actions/upload-artifact@v5
+
+      - name: Read version
+        id: ver
+        run: |
+          v=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([^+]+).*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      # Pre-package Runner.app as a tarball BEFORE upload. Otherwise
+      # actions/upload-artifact uploads the directory contents flat
+      # (no top-level Runner.app/), which makes the release-time
+      # tarball impossible.
+      - name: Package iOS .app as tarball
+        run: |
+          set -e
+          VERSION="${{ steps.ver.outputs.version }}"
+          tar -C build/ios/iphoneos -czf \
+              "icd360svpn-${VERSION}-ios-unsigned.tar.gz" \
+              Runner.app
+
+      - uses: actions/upload-artifact@v7
         with:
           name: ios
-          path: app/build/ios/iphoneos/Runner.app/
+          path: app/icd360svpn-*-ios-unsigned.tar.gz
 
   # ─────────────────────────────────────────────────────────────
-  # Release job: only runs on tag pushes (`v1.2.3`). Downloads
-  # every artifact from the build matrix, computes SHA256 sums,
-  # writes the version.json manifest, and:
-  #   1. Uploads everything to GitHub Releases.
-  #   2. Pushes everything to nginx on vpn.icd360s.de via SSH if
-  #      the VPN_DEPLOY_SSH_KEY secret is set.
+  # Release job — only on `v*` tags. Downloads every artifact,
+  # computes SHA256, generates version.json, creates a GitHub
+  # Release, and rsyncs to vpn.icd360s.de.
   # ─────────────────────────────────────────────────────────────
   release:
     name: Release ${{ github.ref_name }}
@@ -279,59 +312,62 @@ jobs:
       - build_android
       - build_ios
     permissions:
-      contents: write   # for softprops/action-gh-release
+      contents: write
+    # NOTE: this job intentionally does NOT inherit defaults.run.working-directory
+    # = app from individual build jobs. We work from the repo root here so the
+    # paths to dist/ and out/ are unambiguous.
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Read version from pubspec
         id: ver
         run: |
+          set -e
           v=$(grep '^version:' app/pubspec.yaml | sed -E 's/version: *([^+]+)\+([0-9]+).*/\1/')
           b=$(grep '^version:' app/pubspec.yaml | sed -E 's/version: *([^+]+)\+([0-9]+).*/\2/')
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "build=$b" >> "$GITHUB_OUTPUT"
           tag="${GITHUB_REF#refs/tags/}"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "::notice::pubspec version=$v build=$b tag=$tag"
           if [ "v$v" != "$tag" ]; then
             echo "::warning::tag $tag does not match pubspec version v$v"
           fi
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
+      - name: Inspect downloaded layout
+        run: find dist -type f | sort
+
       - name: Layout files for upload + manifest
-        id: layout
-        working-directory: ${{ github.workspace }}
         run: |
           set -e
           V="${{ steps.ver.outputs.version }}"
+          if [ -z "$V" ]; then
+            echo "::error::version is empty — Read version step failed"
+            exit 1
+          fi
           mkdir -p out/download/vpn-management_icd360sev/{linux,macos,windows,android,ios}
 
           # linux
-          if ls dist/linux/*.deb >/dev/null 2>&1; then
-            cp dist/linux/*.deb out/download/vpn-management_icd360sev/linux/
-          fi
-          # macos
-          if ls dist/macos/*.dmg >/dev/null 2>&1; then
-            cp dist/macos/*.dmg out/download/vpn-management_icd360sev/macos/
-          fi
-          # windows
-          if ls dist/windows/*.zip >/dev/null 2>&1; then
-            cp dist/windows/*.zip out/download/vpn-management_icd360sev/windows/
-          fi
-          # android — copy the entire android-out tree
-          if [ -d dist/android ]; then
-            cp dist/android/* out/download/vpn-management_icd360sev/android/
-          fi
-          # ios — pack the .app as a tarball since GitHub Releases
-          # cannot host directories
-          if [ -d dist/ios ]; then
-            tar -C dist/ios -czf out/download/vpn-management_icd360sev/ios/icd360svpn-${V}-ios-unsigned.tar.gz Runner.app
-          fi
+          cp dist/linux/*.deb out/download/vpn-management_icd360sev/linux/
 
-          echo "release_dir=$(pwd)/out" >> "$GITHUB_OUTPUT"
+          # macos
+          cp dist/macos/*.dmg out/download/vpn-management_icd360sev/macos/
+
+          # windows
+          cp dist/windows/*.zip out/download/vpn-management_icd360sev/windows/
+
+          # android — universal apk + 3 split apks + aab
+          cp dist/android/* out/download/vpn-management_icd360sev/android/
+
+          # ios — already pre-packaged as a tarball by build_ios
+          cp dist/ios/icd360svpn-*-ios-unsigned.tar.gz \
+             out/download/vpn-management_icd360sev/ios/
+
           find out -type f | sort
 
       - name: Compute SHA256 sums
@@ -341,24 +377,20 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Generate version.json
-        id: manifest
-        working-directory: ${{ github.workspace }}
         run: |
           set -e
           V="${{ steps.ver.outputs.version }}"
           B="${{ steps.ver.outputs.build }}"
           mkdir -p out/updates
 
-          # Pluck the first file in each platform dir + its sha256.
+          # First filename in each platform dir + matching SHA256.
           first_in() {
             local dir="$1"
             ls "out/download/vpn-management_icd360sev/$dir" 2>/dev/null | head -1 || true
           }
           sha_for() {
-            local file="$1"
-            sha256sum "$file" | awk '{print $1}'
+            sha256sum "$1" | awk '{print $1}'
           }
-
           json_field() {
             local platform="$1"
             local fname
@@ -372,9 +404,7 @@ jobs:
             printf '{"url": "https://vpn.icd360s.de/download/vpn-management_icd360sev/%s/%s", "sha256": "%s"}' "$platform" "$fname" "$sha"
           }
 
-          # Pull the unreleased changelog bullets out of CHANGELOG.md
-          # for the matching version section. Falls back to a single
-          # generic line if nothing matches.
+          # Pull the matching version section out of CHANGELOG.md.
           changelog_lines() {
             awk -v ver="$V" '
               $0 ~ "^## \\[" ver "\\]" { capture=1; next }
@@ -386,7 +416,6 @@ jobs:
               }
             ' CHANGELOG.md
           }
-
           changelog=$(changelog_lines)
           if [ -z "$changelog" ]; then
             changelog="\"Release $V\""
@@ -409,7 +438,6 @@ jobs:
             echo "}"
           } > out/updates/version.json
           cat out/updates/version.json
-          # Validate JSON
           python3 -c 'import json, sys; json.load(open("out/updates/version.json"))'
 
       - name: Create / update GitHub Release
@@ -445,23 +473,11 @@ jobs:
           HOST="${VPN_DEPLOY_SSH_HOST:-vpn.icd360s.de}"
           ssh-keyscan -p "$PORT" -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # rsync the entire output tree. The remote shell is locked
-          # to `rrsync -wo /var/www/html` (see docs/vpn-server-setup.md).
-          # Three rrsync gotchas:
-          #
-          # 1. The destination MUST be `:.` (relative to the rrsync
-          #    root) — `:/` is rejected as an unsafe absolute path.
-          #
-          # 2. --delete is incompatible with -wo (write-only) mode
-          #    because rrsync forbids any client-driven listing of
-          #    the destination. Old release artifacts therefore
-          #    accumulate on the server; that's fine because the
-          #    filenames are content-addressed by version.
-          #
-          # 3. -avz preserves times/owners/perms which the remote
-          #    rrsync rejects since the deploy user has no rights
-          #    to chown. We override with --no-times --no-owner
-          #    --no-group --no-perms.
+          # See docs/vpn-server-setup.md for the rrsync gotchas:
+          #   - destination must be `:.` (rrsync rejects absolute `/`)
+          #   - --delete is incompatible with -wo write-only mode
+          #   - --no-times --no-owner --no-group --no-perms because the
+          #     deploy user has no rights to chown
           rsync -rlvz --no-times --no-owner --no-group --no-perms \
             -e "ssh -i ~/.ssh/deploy -p $PORT -o StrictHostKeyChecking=accept-new" \
             ${{ github.workspace }}/out/ \

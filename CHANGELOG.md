@@ -10,13 +10,29 @@ short and user-facing.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-04-11
+## [1.0.1] - 2026-04-11
 
-First tagged release. Covers everything from the initial repo
-scaffold (M0) through the working release pipeline (M6.4). After
-this tag, the GitHub Actions release job runs end-to-end: build,
-SHA256, version.json, GitHub Release upload, and rsync to
-vpn.icd360s.de.
+First successfully-published release of icd360svpn. (The earlier
+v0.1.0 tag was an aborted dry-run — its release job failed at the
+ios tar step before any artifact was uploaded; the tag was left
+behind on GitHub as historical evidence.) This v1.0.1 covers
+everything from the initial repo scaffold (M0) through the working
+release pipeline (M6.5).
+
+### Fixed in M6.5
+- iOS build now packages `Runner.app` as a tarball BEFORE upload.
+  Previously `actions/upload-artifact` flattened the directory
+  contents, so `dist/ios/Runner.app/` did not exist at release time
+  and the layout step's `tar` failed with "Cannot stat".
+- "Read version from pubspec" step in the release job now reads
+  `app/pubspec.yaml` from the workspace root (the release job no
+  longer inherits the per-job `working-directory: app` default —
+  it works from the repo root throughout).
+- Bumped action versions to ones that ship Node.js 24 natively:
+  `actions/checkout@v6`, `actions/upload-artifact@v7`,
+  `actions/download-artifact@v8`. Removed the
+  `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` workflow env var — no
+  longer needed.
 
 ### Admin app (M3 → M5)
 - Native Flutter desktop app for macOS, Linux, Windows.
