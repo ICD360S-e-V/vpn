@@ -1,0 +1,48 @@
+# macOS / Xcode
+.DS_Store
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.swiftpm/
+.build/
+Package.resolved
+
+# Go (vpn-agent)
+agent/vpn-agent
+agent/*.test
+agent/coverage.out
+agent/dist/
+*.exe
+
+# Secrets — NEVER commit
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*-private.key
+*_private.key
+secrets/
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Node (if we add tooling)
+node_modules/
+
+# Logs
+*.log

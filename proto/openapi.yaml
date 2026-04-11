@@ -1,0 +1,249 @@
+openapi: 3.1.0
+info:
+  title: ICD360S VPN Agent API
+  version: 0.0.1-draft
+  description: |
+    HTTP API exposed by `vpn-agent` running on `vpn.icd360s.de`.
+    All endpoints require mTLS with a valid admin client cert.
+    Listen address: `https://10.8.0.1:8443` (reachable only via the VPN tunnel).
+  contact:
+    name: ICD360S e.V.
+    email: github@icd360s.de
+  license:
+    name: Proprietary
+servers:
+  - url: https://10.8.0.1:8443
+    description: vpn-agent on vpn.icd360s.de (via WireGuard tunnel)
+security:
+  - mTLS: []
+
+paths:
+  /v1/health:
+    get:
+      summary: Liveness + dependency status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /v1/peers:
+    get:
+      summary: List all WireGuard peers
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Peer'
+    post:
+      summary: Create a new peer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeerCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeerCreateResponse'
+
+  /v1/peers/{pubkey}:
+    delete:
+      summary: Revoke a peer
+      parameters:
+        - name: pubkey
+          in: path
+          required: true
+          schema:
+            type: string
+            description: WireGuard public key (URL-safe base64)
+      responses:
+        '204':
+          description: Revoked
+
+  /v1/connections:
+    get:
+      summary: Currently active sessions (peers with recent handshake)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Connection'
+
+  /v1/stats/traffic:
+    get:
+      summary: Per-peer bandwidth time series
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          schema:
+            type: string
+            enum: [hour, day, week, month]
+            default: day
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficSeries'
+
+  /v1/adguard/stats:
+    get:
+      summary: AdGuard Home aggregate stats
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdGuardStats'
+
+  /v1/adguard/queries:
+    get:
+      summary: AdGuard Home recent query log
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdGuardQuery'
+
+components:
+  securitySchemes:
+    mTLS:
+      type: mutualTLS
+
+  schemas:
+    Health:
+      type: object
+      required: [status, wg_up, adguard_up, uptime_seconds]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        wg_up: { type: boolean }
+        adguard_up: { type: boolean }
+        uptime_seconds: { type: integer }
+        agent_version: { type: string }
+        server_time: { type: string, format: date-time }
+
+    Peer:
+      type: object
+      required: [public_key, allowed_ips, name, created_at]
+      properties:
+        public_key:    { type: string }
+        name:          { type: string, description: "Display name (e.g. 'phone-andrei')" }
+        allowed_ips:   { type: array, items: { type: string } }
+        created_at:    { type: string, format: date-time }
+        last_handshake_at: { type: string, format: date-time, nullable: true }
+        rx_bytes_total:    { type: integer, format: int64 }
+        tx_bytes_total:    { type: integer, format: int64 }
+        endpoint:      { type: string, nullable: true }
+        revoked:       { type: boolean }
+
+    PeerCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: "Human-readable label, e.g. 'phone', 'laptop-work'"
+
+    PeerCreateResponse:
+      type: object
+      required: [peer, client_config, qr_png_base64]
+      properties:
+        peer: { $ref: '#/components/schemas/Peer' }
+        client_config:
+          type: string
+          description: "Rendered WireGuard .conf file ready to import"
+        qr_png_base64:
+          type: string
+          format: byte
+          description: "PNG of the QR code, base64-encoded"
+
+    Connection:
+      type: object
+      required: [public_key, endpoint, last_handshake_at]
+      properties:
+        public_key: { type: string }
+        endpoint:   { type: string }
+        last_handshake_at: { type: string, format: date-time }
+        rx_bytes_session: { type: integer, format: int64 }
+        tx_bytes_session: { type: integer, format: int64 }
+
+    TrafficSeries:
+      type: object
+      required: [granularity, series]
+      properties:
+        granularity: { type: string }
+        series:
+          type: array
+          items:
+            type: object
+            required: [public_key, points]
+            properties:
+              public_key: { type: string }
+              points:
+                type: array
+                items:
+                  type: object
+                  required: [t, rx, tx]
+                  properties:
+                    t:  { type: string, format: date-time }
+                    rx: { type: integer, format: int64 }
+                    tx: { type: integer, format: int64 }
+
+    AdGuardStats:
+      type: object
+      properties:
+        num_dns_queries:        { type: integer }
+        num_blocked_filtering:  { type: integer }
+        avg_processing_time_ms: { type: number }
+        top_blocked_domains:
+          type: array
+          items:
+            type: object
+            properties:
+              domain: { type: string }
+              count:  { type: integer }
+
+    AdGuardQuery:
+      type: object
+      properties:
+        time:    { type: string, format: date-time }
+        client:  { type: string }
+        question: { type: string }
+        answer:  { type: string }
+        blocked: { type: boolean }
+        rule:    { type: string, nullable: true }
