@@ -440,17 +440,29 @@ jobs:
           mkdir -p ~/.ssh
           echo "$VPN_DEPLOY_SSH_KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
-          ssh-keyscan -p "${VPN_DEPLOY_SSH_PORT:-36000}" -t ed25519 \
-              "${VPN_DEPLOY_SSH_HOST:-vpn.icd360s.de}" >> ~/.ssh/known_hosts 2>/dev/null
-
           PORT="${VPN_DEPLOY_SSH_PORT:-36000}"
-          USER="${VPN_DEPLOY_SSH_USER:-icd360sev}"
+          USER="${VPN_DEPLOY_SSH_USER:-vpn-deploy}"
           HOST="${VPN_DEPLOY_SSH_HOST:-vpn.icd360s.de}"
+          ssh-keyscan -p "$PORT" -t ed25519 "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          # rsync the entire output tree. The remote shell is
-          # restricted to /var/www/html/{download,updates} via rrsync
-          # in authorized_keys (see deployment runbook).
-          rsync -avz --delete \
+          # rsync the entire output tree. The remote shell is locked
+          # to `rrsync -wo /var/www/html` (see docs/vpn-server-setup.md).
+          # Three rrsync gotchas:
+          #
+          # 1. The destination MUST be `:.` (relative to the rrsync
+          #    root) — `:/` is rejected as an unsafe absolute path.
+          #
+          # 2. --delete is incompatible with -wo (write-only) mode
+          #    because rrsync forbids any client-driven listing of
+          #    the destination. Old release artifacts therefore
+          #    accumulate on the server; that's fine because the
+          #    filenames are content-addressed by version.
+          #
+          # 3. -avz preserves times/owners/perms which the remote
+          #    rrsync rejects since the deploy user has no rights
+          #    to chown. We override with --no-times --no-owner
+          #    --no-group --no-perms.
+          rsync -rlvz --no-times --no-owner --no-group --no-perms \
             -e "ssh -i ~/.ssh/deploy -p $PORT -o StrictHostKeyChecking=accept-new" \
             ${{ github.workspace }}/out/ \
-            "$USER@$HOST:/"
+            "$USER@$HOST:."
