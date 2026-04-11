@@ -125,11 +125,13 @@ public actor APIClient {
 
         // 2xx → success
         if (200..<300).contains(http.statusCode) {
-            // 204 No Content has no body — synthesise an empty response.
-            if http.statusCode == 204 || data.isEmpty {
-                if T.self == EmptyResponse.self {
-                    return EmptyResponse() as! T  // SAFETY: type check above
-                }
+            // 204 No Content has no body — return EmptyResponse if T allows it.
+            // The conditional cast is safe: if T is anything other than
+            // EmptyResponse, we fall through to the decode path below
+            // which will report a clean DecodingError on empty data.
+            if (http.statusCode == 204 || data.isEmpty),
+               let empty = EmptyResponse() as? T {
+                return empty
             }
             do {
                 return try decoder.decode(T.self, from: data)
@@ -153,19 +155,21 @@ public actor APIClient {
     // The agent emits times like `2026-04-11T13:14:18.895571198Z` —
     // RFC 3339 with high-precision fractional seconds. Standard
     // `JSONDecoder.DateDecodingStrategy.iso8601` does not handle
-    // fractional seconds. We try with-fractional first, fall back to
-    // without-fractional, and finally throw a clean DecodingError.
+    // fractional seconds. We use `Date.ISO8601FormatStyle` (modern,
+    // Sendable, value-typed) instead of `ISO8601DateFormatter` (a
+    // non-Sendable reference type that triggers warnings under Swift
+    // 6 strict concurrency).
 
     private static func makeDateDecodingStrategy() -> JSONDecoder.DateDecodingStrategy {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let withoutFraction = ISO8601DateFormatter()
-        withoutFraction.formatOptions = [.withInternetDateTime]
-
         return .custom { decoder in
             let container = try decoder.singleValueContainer()
             let raw = try container.decode(String.self)
-            if let d = withFraction.date(from: raw) ?? withoutFraction.date(from: raw) {
+            // Try with fractional seconds first — that's what the agent emits.
+            if let d = try? Date(raw, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
+                return d
+            }
+            // Fall back to plain RFC 3339 without fractional seconds.
+            if let d = try? Date(raw, strategy: Date.ISO8601FormatStyle()) {
                 return d
             }
             throw DecodingError.dataCorruptedError(

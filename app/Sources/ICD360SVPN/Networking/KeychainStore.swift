@@ -50,12 +50,17 @@ public enum KeychainStore {
         }
         guard let items = rawItems as? [[String: Any]],
               let first = items.first,
-              let identity = first[kSecImportItemIdentity as String] else {
+              let identityAny = first[kSecImportItemIdentity as String] else {
             throw KeychainError.pkcs12ImportFailed(errSecItemNotFound)
         }
-        // The cast is safe: kSecImportItemIdentity is documented to
-        // produce a SecIdentity.
-        let secIdentity = identity as! SecIdentity  // SAFETY: see above
+        // CFBridging: when the import sets kSecImportItemIdentity, the
+        // value is a SecIdentity. We use a conditional cast anyway so
+        // that a malformed import bubbles up as a clean error rather
+        // than a runtime trap.
+        guard CFGetTypeID(identityAny as CFTypeRef) == SecIdentityGetTypeID() else {
+            throw KeychainError.pkcs12ImportFailed(errSecParam)
+        }
+        let secIdentity = identityAny as! SecIdentity  // SAFETY: type-id checked above
 
         let addQuery: [String: Any] = [
             kSecClass as String:     kSecClassIdentity,
@@ -84,8 +89,12 @@ public enum KeychainStore {
         guard status == errSecSuccess, let item else {
             throw KeychainError.unexpectedStatus(status)
         }
-        // SAFETY: kSecClassIdentity guarantees a SecIdentity result.
-        return (item as! SecIdentity)
+        // Defensive type check — kSecClassIdentity should guarantee
+        // SecIdentity, but we don't trust the keychain to be sane.
+        guard CFGetTypeID(item) == SecIdentityGetTypeID() else {
+            throw KeychainError.unexpectedStatus(errSecInternalError)
+        }
+        return (item as! SecIdentity)  // SAFETY: type-id checked above
     }
 
     /// Deletes any identity stored under `label`. Treats "not found"
@@ -143,8 +152,12 @@ public enum KeychainStore {
         guard status == errSecSuccess, let item else {
             throw KeychainError.unexpectedStatus(status)
         }
-        // SAFETY: kSecClassCertificate guarantees a SecCertificate.
-        return (item as! SecCertificate)
+        // Defensive type check — kSecClassCertificate should guarantee
+        // SecCertificate, but we don't trust the keychain to be sane.
+        guard CFGetTypeID(item) == SecCertificateGetTypeID() else {
+            throw KeychainError.unexpectedStatus(errSecInternalError)
+        }
+        return (item as! SecCertificate)  // SAFETY: type-id checked above
     }
 
     // MARK: - PEM → PKCS#12 conversion (M3 stopgap)

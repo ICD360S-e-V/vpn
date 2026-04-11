@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 //
 // ICD360SVPN — macOS admin app for the ICD360S WireGuard server.
 //

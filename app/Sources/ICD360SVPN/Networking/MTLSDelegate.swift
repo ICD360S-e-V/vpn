@@ -18,7 +18,12 @@ import Security
 
 /// URLSessionDelegate that pins the server cert to a private CA and
 /// presents a client identity for mutual TLS.
-final class MTLSDelegate: NSObject, URLSessionDelegate {
+///
+/// Conforms to `@unchecked Sendable` because all stored properties
+/// are immutable Core Foundation handles set once in the initialiser
+/// and never mutated. Required for Swift 6 strict concurrency when
+/// the delegate is captured across actor boundaries by URLSession.
+final class MTLSDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
 
     private let identity: SecIdentity
     private let trustedCA: SecCertificate

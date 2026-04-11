@@ -145,6 +145,21 @@ app/
   expose a public PKCS#12 export API. M4 should replace this with a
   pure-Swift implementation (e.g. swift-asn1) so the app has zero
   shell dependencies. Tracked in `KeychainStore.pemBundleToPKCS12`.
+- **`SecPKCS12Import` returns `errSecAuthFailed (-25293)` on
+  macOS Sequoia 15.x even with valid PKCS#12 blobs** ([Apple
+  Developer Forums #697030][f697030], [#723242][f723242],
+  [#764516][f764516]). This is a known regression in macOS Sequoia's
+  Security framework — there is no client-side workaround. If you hit
+  it, the bundled openssl PBE-SHA1-3DES blob is correct; the bug is
+  inside Apple's importer. Workarounds users have reported:
+  re-generating the PKCS#12 with explicit MAC iterations (`-macsaltlen
+  20 -iter 2048`), or downgrading the macOS test machine to Sonoma
+  14.x. Track [openradar FB8988319][rdar].
+
+[f697030]: https://developer.apple.com/forums/thread/697030
+[f723242]: https://developer.apple.com/forums/thread/723242
+[f764516]: https://forums.developer.apple.com/forums/thread/764516
+[rdar]:    https://openradar.appspot.com/FB8988319
 - **No bandwidth charts yet.** That's M5.
 - **No AdGuard Home query log view.** That's M6.
 - **No new-peer-from-country alert.** That's M7.
