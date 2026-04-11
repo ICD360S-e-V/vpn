@@ -1,181 +1,151 @@
-# macOS App
+# icd360svpn — Flutter desktop admin app
 
-Native SwiftUI desktop app for managing the ICD360S VPN server. Talks
-to `vpn-agent` over the WireGuard tunnel via mutual TLS.
+Cross-platform Flutter app for managing the ICD360S WireGuard VPN
+server. Talks to `vpn-agent` on `vpn.icd360s.de` over mutual TLS, on
+the WireGuard tunnel itself.
 
-## Quick start (on a Mac)
+> **Status:** M5 — first cut. Single SwiftPM-style scaffold with no
+> committed platform directories. Build verification happens in
+> GitHub Actions on `macos-latest`, `ubuntu-latest`, and
+> `windows-latest`. See `.github/workflows/flutter.yml`.
 
-```bash
-git clone https://github.com/ICD360S-e-V/vpn.git
-cd vpn/app
-swift build           # builds the executable target
-swift run ICD360SVPN  # launches the app
+## Targets
 
-# Or open Package.swift in Xcode 15+ for SwiftUI previews and code completion.
-```
+| Platform | Status | Build runner |
+|---|---|---|
+| **macOS** | primary | `macos-latest` |
+| Linux desktop | secondary | `ubuntu-latest` |
+| Windows | tertiary | `windows-latest` |
+| iOS / Android | not yet | — |
 
-Requires **macOS 14 (Sonoma)** and **Swift 5.9+**. Zero third-party
-dependencies — only Foundation, SwiftUI, Security, CoreImage, and
-AppKit (for `NSPasteboard`/`NSImage`).
+## Stack
 
-## First run — enrollment
+| Concern | Package | Reason |
+|---|---|---|
+| HTTP client + interceptors | `dio ^5.7.0` | mTLS via `IOHttpClientAdapter` |
+| State management | `flutter_riverpod ^3.0.0` | small-app sweet spot in 2026 per research agent |
+| Secure cert storage | `flutter_secure_storage ^10.0.0` | Keychain / libsecret / DPAPI / Keystore |
+| Bandwidth charts | `fl_chart ^0.70.0` | smallest binary impact, BSD-3 |
+| QR rendering | `qr_flutter ^4.1.0` | pure-Dart, no native deps |
+| Lints | `flutter_lints ^5.0.0` | strict-casts + strict-inference + strict-raw-types |
 
-The app stores no credentials by default, so on first launch you see
-the **Enroll this Mac** screen. To populate it, ssh to the VPN server
-and run `vpn-agent issue-cert` to mint a fresh client certificate
-signed by the agent's local CA:
-
-```bash
-ssh -i ~/.ssh/id_ed25519_vpn_icd360s_de -p 36000 icd360sev@vpn.icd360s.de
-sudo /usr/local/sbin/vpn-agent issue-cert \
-    --cert-dir /etc/vpn-agent \
-    --out /tmp/admin-andrei \
-    andrei-laptop
-sudo cat /tmp/admin-andrei/andrei-laptop-ca.pem
-sudo cat /tmp/admin-andrei/andrei-laptop.pem
-sudo cat /tmp/admin-andrei/andrei-laptop.key
-```
-
-Copy each of those three PEM blobs into the matching field in the
-EnrollmentView, leave the agent URL at the default `https://10.8.0.1:8443`,
-and press **Connect**. The app will:
-
-1. Convert the cert + key into a PKCS#12 envelope using the system
-   `/usr/bin/openssl` (we shell out for M3 — see KeychainStore.swift's
-   TODO).
-2. Import the resulting identity into the macOS Keychain under the
-   label `ICD360SVPN.admin`.
-3. Store the CA cert separately under `ICD360SVPN.ca`.
-4. Build an `APIClient` using a URLSession bound to a custom
-   `MTLSDelegate` that pins the server cert to your CA and presents
-   the client identity for client-cert challenges.
-5. Switch to the main UI.
-
-On every subsequent launch, `AppState.bootstrap()` fetches the
-identity from Keychain and goes straight to the connected state — no
-re-enrollment.
-
-> ⚠️ **Reachability**: the agent listens on `10.8.0.1:8443`, which is
-> the WireGuard server's tunnel address. Your Mac must already be a
-> connected WireGuard client (with `AllowedIPs` covering `10.8.0.0/24`)
-> for the API call to even make TCP. The app intentionally has no path
-> through the public internet — defense in depth.
-
-## Architecture
-
-```
-ICD360SVPNApp (@main)
-   ├─ owns AppState (@Observable)
-   │      ├─ phase: AppPhase = .needsEnrollment | .connected(APIClient) | …
-   │      ├─ bootstrap() async  ─ Keychain probe at launch
-   │      ├─ enroll(...)  async  ─ PEM → PKCS12 → Keychain → APIClient
-   │      └─ logout()             ─ wipe Keychain, back to enrollment
-   │
-   └─ ContentView (env: AppState)
-          └─ switch state.phase
-                ├─ .needsEnrollment → EnrollmentView
-                ├─ .connecting      → ProgressView
-                ├─ .connected(c)    → MainView(client: c)
-                │      └─ NavigationSplitView
-                │            ├─ Sidebar: Peers / Health / Settings
-                │            └─ Detail:
-                │                  ├─ PeersView    (list / create / revoke)
-                │                  ├─ HealthView   (5s polling)
-                │                  └─ SettingsView (logout / about)
-                └─ .error(msg)      → ErrorView
-```
-
-## Network layer
-
-Everything HTTP lives in `Networking/`:
-
-| File | Purpose |
-|---|---|
-| `MTLSDelegate.swift` | URLSessionDelegate. Pins server trust to a single CA, presents the client identity for the cert challenge. |
-| `APIClient.swift` | `actor APIClient`. Typed async methods: `health()`, `listPeers()`, `createPeer(name:)`, `deletePeer(publicKey:)`. JSON encoding uses `convertToSnakeCase` and decoding uses `convertFromSnakeCase`. Custom date strategy handles RFC 3339 with **fractional seconds** (the agent emits `2026-04-11T13:14:18.895571198Z`, which the standard `.iso8601` strategy refuses). |
-| `KeychainStore.swift` | Wraps Security.framework: PKCS12 import, identity / CA add / load / delete, plus the M3 `pemBundleToPKCS12` helper that shells out to `openssl`. |
-
-Errors are normalised into the `APIError` enum (`Models/APIError.swift`)
-which speaks RFC 7807 `application/problem+json` natively.
+JSON parsing is **hand-rolled** — no `json_serializable` / `build_runner`
+in the dependency graph. Six small models is below the threshold
+where code-gen pays for itself.
 
 ## Layout
 
 ```
 app/
-├── Package.swift
-├── README.md
-└── Sources/
-    └── ICD360SVPN/
-        ├── ICD360SVPNApp.swift           ← @main
-        ├── AppState.swift                ← lifecycle / phase machine
-        ├── ContentView.swift             ← phase router
+├── pubspec.yaml
+├── analysis_options.yaml
+├── README.md (you are here)
+└── lib/
+    ├── main.dart                    Entry point, ProviderScope
+    └── src/
+        ├── app.dart                 AppPhase machine + ContentRouter + Material theme
         │
-        ├── Models/
-        │   ├── Peer.swift
-        │   ├── Health.swift
-        │   ├── PeerCreateRequest.swift
-        │   ├── PeerCreateResponse.swift
-        │   └── APIError.swift            ← + nested ProblemDetails
+        ├── models/
+        │   ├── peer.dart                  GET /v1/peers element
+        │   ├── health.dart                GET /v1/health
+        │   ├── peer_create_response.dart  POST /v1/peers response
+        │   ├── traffic_series.dart        GET /v1/peers/{pubkey}/bandwidth
+        │   ├── enrollment_bundle.dart     base64+gzip+json from `vpn-agent issue-bundle`
+        │   └── api_error.dart             RFC 7807 problem+json + transport / decoding
         │
-        ├── Networking/
-        │   ├── APIClient.swift           ← actor + JSON wrapper
-        │   ├── MTLSDelegate.swift
-        │   └── KeychainStore.swift       ← + KeychainError enum
+        ├── api/
+        │   ├── api_client.dart      Dio wrapper, one method per endpoint
+        │   ├── mtls_context.dart    SecurityContext factory (PEM bytes)
+        │   └── secure_store.dart    flutter_secure_storage wrapper
         │
-        ├── Components/
-        │   ├── StatusBadge.swift
-        │   └── QRCodeView.swift          ← CoreImage CIQRCodeGenerator
+        ├── common/
+        │   ├── status_badge.dart    Coloured capsule for `ok` / `degraded`
+        │   └── qr_code_view.dart    Thin wrapper around qr_flutter
         │
-        └── Features/
-            ├── Enrollment/EnrollmentView.swift
-            ├── Main/
-            │   ├── MainView.swift        ← NavigationSplitView
-            │   └── ErrorView.swift
-            ├── Peers/
-            │   ├── PeersView.swift       ← list + delete
-            │   ├── PeerRow.swift
-            │   └── CreatePeerSheet.swift ← + QR display
-            ├── Health/HealthView.swift
-            └── Settings/SettingsView.swift
+        └── features/
+            ├── enrollment/enrollment_screen.dart   Paste 1 base64 blob, hit Connect
+            ├── main/main_shell.dart                NavigationRail Peers / Health / Settings
+            ├── main/error_screen.dart              Generic error + Reset
+            ├── peers/peers_screen.dart             List + refresh + create + revoke
+            ├── peers/peer_tile.dart                Row with switch (enable/disable)
+            ├── peers/create_peer_dialog.dart       Name → POST → result + QR + copy
+            ├── health/health_screen.dart           5s polling, status + uptime + version
+            └── settings/settings_screen.dart       Logout + about
 ```
 
-## Known limitations (M3)
+## Why no `macos/`, `linux/`, `windows/` committed?
 
-- **PKCS#12 export shells out to `/usr/bin/openssl`.** Apple does not
-  expose a public PKCS#12 export API. M4 should replace this with a
-  pure-Swift implementation (e.g. swift-asn1) so the app has zero
-  shell dependencies. Tracked in `KeychainStore.pemBundleToPKCS12`.
-- **`SecPKCS12Import` returns `errSecAuthFailed (-25293)` on
-  macOS Sequoia 15.x even with valid PKCS#12 blobs** ([Apple
-  Developer Forums #697030][f697030], [#723242][f723242],
-  [#764516][f764516]). This is a known regression in macOS Sequoia's
-  Security framework — there is no client-side workaround. If you hit
-  it, the bundled openssl PBE-SHA1-3DES blob is correct; the bug is
-  inside Apple's importer. Workarounds users have reported:
-  re-generating the PKCS#12 with explicit MAC iterations (`-macsaltlen
-  20 -iter 2048`), or downgrading the macOS test machine to Sonoma
-  14.x. Track [openradar FB8988319][rdar].
+`flutter create --platforms=$X .` regenerates the platform-specific
+scaffold (Xcode project, CMakeLists, MSBuild solution) cleanly each
+build. Committing them would lock us into a specific Flutter SDK
+version's template AND make the diff noisy when Flutter ships
+template updates. We don't customise any of those files yet, so
+generating them on-the-fly in CI is strictly better.
 
-[f697030]: https://developer.apple.com/forums/thread/697030
-[f723242]: https://developer.apple.com/forums/thread/723242
-[f764516]: https://forums.developer.apple.com/forums/thread/764516
-[rdar]:    https://openradar.appspot.com/FB8988319
-- **No bandwidth charts yet.** That's M5.
-- **No AdGuard Home query log view.** That's M6.
-- **No new-peer-from-country alert.** That's M7.
-- **App is unsigned and unsandboxed.** That's M8.
-- **Enrollment is manual paste, not via an HTTP enrollment endpoint.**
-  The agent does not yet expose `/v1/admin/enroll`. M3.5 / M4 will add
-  it so admins enroll via a one-time token instead of pasting PEM.
+**When this stops being the right call:** the moment we need to
+customise `Info.plist` (entitlements for code signing), the macOS
+`.entitlements` file (network client capability), or
+`linux/CMakeLists.txt` (extra system deps). At that point, commit
+the platform dir.
 
-## Verifying the build
+## First run
 
-Cannot be verified in CI on the alma server (no Swift toolchain on
-AlmaLinux 10). Compilation must happen on a Mac. Run:
+1. **Server side:** SSH to vpn.icd360s.de and issue an enrollment bundle:
+   ```bash
+   ssh -i ~/.ssh/id_ed25519_vpn_icd360s_de -p 36000 icd360sev@vpn.icd360s.de
+   sudo /usr/local/sbin/vpn-agent issue-bundle andrei-mac
+   ```
+   Copy the single base64 line printed to stdout.
+
+2. **Client side:** Launch the app. On first run it shows the
+   enrollment screen with one TextField. Paste the base64 blob, hit
+   **Connect**. The app:
+   - decodes (base64 → gzip → JSON),
+   - extracts cert / key / CA / agent URL,
+   - writes them into the OS secure store via `flutter_secure_storage`,
+   - builds a `dart:io` `SecurityContext` and a Dio client,
+   - flips into the connected state.
+
+3. On every subsequent launch, `AppPhaseController.bootstrap()` reads
+   the saved identity and goes straight to the connected state.
+
+## Build locally (on a Mac)
 
 ```bash
 cd app
-swift build 2>&1 | head -50
+flutter create --platforms=macos --project-name icd360svpn --org de.icd360s .
+flutter pub get
+flutter run -d macos
 ```
 
-Any error here is a real issue — please report it.
+Or just `flutter build macos --no-codesign`. Linux/Windows builds
+work with the analogous commands.
+
+## CI
+
+`.github/workflows/flutter.yml` runs four jobs on every push that
+touches `app/`:
+
+| Job | Runner | Steps |
+|---|---|---|
+| `analyze` | ubuntu-latest | `flutter analyze` (and `flutter test` if any tests exist) |
+| `build_linux` | ubuntu-latest | install gtk + libsecret deps, then `flutter build linux --release` |
+| `build_macos` | macos-latest | `flutter build macos --release --no-codesign` |
+| `build_windows` | windows-latest | `flutter build windows --release` |
+
+Each build job uploads the resulting bundle as a workflow artifact.
+There is no flutter SDK on the alma server: we never compile here.
+
+## Known limitations (M5 first cut)
+
+- **No bandwidth chart screen yet.** The model + endpoint client
+  exist (`TrafficSeries`, `ApiClient.peerBandwidth`); the chart UI
+  will land in M5.1.
+- **No peer detail screen yet.** Tapping a peer doesn't navigate
+  anywhere — the row is the source of truth.
+- **No tests.** `flutter test` is run by CI if `test/**/*.dart`
+  files exist; they don't yet.
+- **No app icon.** Will land when we customise the platform
+  directories.
+- **No code signing.** macOS build runs with `--no-codesign`. M8 will
+  set up notarisation.

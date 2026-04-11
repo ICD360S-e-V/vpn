@@ -1,0 +1,182 @@
+// ICD360SVPN — lib/src/app.dart
+//
+// Top-level Material app + the lifecycle phase machine. The phase
+// drives ContentRouter which decides whether to show the enrollment
+// screen, the main shell, or an error screen.
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'api/api_client.dart';
+import 'api/secure_store.dart';
+import 'features/enrollment/enrollment_screen.dart';
+import 'features/main/error_screen.dart';
+import 'features/main/main_shell.dart';
+import 'models/enrollment_bundle.dart';
+
+// ---------------------------------------------------------------
+// Lifecycle phases
+// ---------------------------------------------------------------
+
+sealed class AppPhase {
+  const AppPhase();
+}
+
+class Bootstrapping extends AppPhase {
+  const Bootstrapping();
+}
+
+class NeedsEnrollment extends AppPhase {
+  const NeedsEnrollment({this.lastError});
+  final String? lastError;
+}
+
+class Connecting extends AppPhase {
+  const Connecting();
+}
+
+class Connected extends AppPhase {
+  const Connected(this.client);
+  final ApiClient client;
+}
+
+class FatalError extends AppPhase {
+  const FatalError(this.message);
+  final String message;
+}
+
+// ---------------------------------------------------------------
+// Providers
+// ---------------------------------------------------------------
+
+/// Singleton secure-storage wrapper.
+final secureStoreProvider = Provider<SecureStore>((ref) => SecureStore());
+
+/// The app's lifecycle phase. Driven by AppPhaseController below.
+final appPhaseProvider = StateNotifierProvider<AppPhaseController, AppPhase>(
+  (ref) => AppPhaseController(ref.watch(secureStoreProvider)),
+);
+
+class AppPhaseController extends StateNotifier<AppPhase> {
+  AppPhaseController(this._store) : super(const Bootstrapping()) {
+    bootstrap();
+  }
+
+  final SecureStore _store;
+
+  Future<void> bootstrap() async {
+    state = const Bootstrapping();
+    try {
+      final id = await _store.loadIdentity();
+      if (id == null) {
+        state = const NeedsEnrollment();
+        return;
+      }
+      final client = ApiClient(
+        baseUrl: id.agentUrl,
+        certPem: id.certPem,
+        keyPem: id.keyPem,
+        caPem: id.caPem,
+      );
+      state = Connected(client);
+    } catch (e) {
+      state = NeedsEnrollment(lastError: e.toString());
+    }
+  }
+
+  Future<void> enrollFromBundleString(String pasted) async {
+    state = const Connecting();
+    try {
+      final bundle = EnrollmentBundle.parse(pasted);
+      await _store.saveIdentity(
+        certPem: bundle.certPem,
+        keyPem: bundle.keyPem,
+        caPem: bundle.caPem,
+        agentUrl: bundle.agentUrl,
+        identityName: bundle.name,
+      );
+      final client = ApiClient(
+        baseUrl: bundle.agentUrl,
+        certPem: bundle.certPem,
+        keyPem: bundle.keyPem,
+        caPem: bundle.caPem,
+      );
+      state = Connected(client);
+    } catch (e) {
+      state = NeedsEnrollment(lastError: e.toString());
+    }
+  }
+
+  Future<void> logout() async {
+    await _store.clear();
+    state = const NeedsEnrollment();
+  }
+}
+
+// ---------------------------------------------------------------
+// Root widget
+// ---------------------------------------------------------------
+
+class ICD360SVPNApp extends StatelessWidget {
+  const ICD360SVPNApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'ICD360S VPN',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1A73E8),
+          brightness: Brightness.light,
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1A73E8),
+          brightness: Brightness.dark,
+        ),
+      ),
+      home: const ContentRouter(),
+    );
+  }
+}
+
+class ContentRouter extends ConsumerWidget {
+  const ContentRouter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final phase = ref.watch(appPhaseProvider);
+    return switch (phase) {
+      Bootstrapping() => const _CenteredSpinner(label: 'Loading…'),
+      NeedsEnrollment() => const EnrollmentScreen(),
+      Connecting() => const _CenteredSpinner(label: 'Connecting…'),
+      Connected(client: final c) => MainShell(client: c),
+      FatalError(message: final m) => ErrorScreen(message: m),
+    };
+  }
+}
+
+class _CenteredSpinner extends StatelessWidget {
+  const _CenteredSpinner({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const CircularProgressIndicator(),
+            const SizedBox(height: 12),
+            Text(label),
+          ],
+        ),
+      ),
+    );
+  }
+}

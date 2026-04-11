@@ -1,0 +1,27 @@
+# Flutter / Dart build outputs
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+pubspec.lock
+
+# Generated platform directories — created on-the-fly in CI by
+# `flutter create --platforms=$X .` so we don't have to commit
+# fragile Xcode/CMake/MSBuild configs that we never customise.
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+
+# Generated metadata
+.metadata
+
+# IDE
+.idea/
+*.iml
+.vscode/

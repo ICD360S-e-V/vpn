@@ -1,0 +1,40 @@
+name: icd360svpn
+description: macOS / desktop admin app for the ICD360S WireGuard VPN server.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.7.0 <4.0.0'
+  flutter: '>=3.41.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP client. We use the IOHttpClientAdapter to plug in a
+  # dart:io HttpClient configured with our private CA + client cert.
+  dio: ^5.7.0
+
+  # Riverpod 3.x — picked over Provider/BLoC after the M5 research
+  # round. Free async caching, dispose semantics, no boilerplate at
+  # this scale.
+  flutter_riverpod: ^3.0.0
+
+  # Cross-platform secure key/value storage. Backed by Keychain on
+  # macOS/iOS, libsecret on Linux, DPAPI on Windows, Keystore on
+  # Android. Stores the three PEMs from the enrollment bundle.
+  flutter_secure_storage: ^10.0.0
+
+  # Bandwidth time-series visualization for /v1/peers/{pubkey}/bandwidth.
+  fl_chart: ^0.70.0
+
+  # WireGuard client config QR rendering for the create-peer flow.
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
