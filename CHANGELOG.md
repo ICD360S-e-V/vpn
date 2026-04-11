@@ -19,6 +19,27 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [Unreleased]
+
+### Changed — repo cleanup for public release (M7.10)
+- Removed `README.md` (top-level), `agent/README.md`,
+  `app/README.md`, and `docs/architecture.md`. The first three
+  duplicated/leaked operational details (SSH command line, key
+  paths, AdGuard credential examples) and the architecture doc
+  documented the AdGuard `admin:admin` default. All sensitive
+  operational content was moved to `/root/CLAUDE.md` on
+  vpn.icd360s.de itself, which is excluded from git via the
+  new `.gitignore` rule `CLAUDE.md` / `**/CLAUDE.md`.
+- Wrote a new minimal top-level `README.md` that only describes
+  the project at a high level + points to the public docs
+  (`docs/release.md`, `docs/vpn-server-setup.md`, OpenAPI spec).
+  No SSH commands, no key paths, no credentials.
+- The repo `ICD360S-e-V/vpn` is being published as **public**
+  with this commit. Audit confirmed: zero PEM/key/cert files
+  ever committed (current tree or git history), zero hardcoded
+  tokens or passwords, all CI secrets accessed via
+  `${{ secrets.X }}`.
+
 ## [1.2.5] - 2026-04-11
 
 ### Added — real Connect/Disconnect VPN via wg-quick + admin prompt (M7.9)

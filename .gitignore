@@ -46,3 +46,10 @@ node_modules/
 
 # Logs
 *.log
+
+# CLAUDE.md is the operational runbook with credentials, key paths,
+# and other sensitive details. Lives at /root/CLAUDE.md on the
+# production server (vpn.icd360s.de) and on local build hosts. The
+# repo is public so this file must NEVER be committed under any name.
+CLAUDE.md
+**/CLAUDE.md
