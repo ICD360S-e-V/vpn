@@ -197,14 +197,21 @@ public enum KeychainStore {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
         process.arguments = [
             "pkcs12", "-export",
+            // -legacy re-enables the OpenSSL 3.x legacy provider which
+            // ships PBE-SHA1-3DES, the only PKCS#12 cipher Apple's
+            // SecPKCS12Import actually accepts on macOS Sonoma + Sequoia.
+            // Without this flag, OpenSSL 3.x defaults to AES-256-CBC +
+            // PBKDF2 which Apple's parser rejects with errSecAuthFailed
+            // (-25293). See README "Known limitations" + openradar
+            // FB8988319 / Apple Forums #764516.
+            "-legacy",
+            "-keypbe", "PBE-SHA1-3DES",
+            "-certpbe", "PBE-SHA1-3DES",
             "-in", certURL.path,
             "-inkey", keyURL.path,
             "-out", outURL.path,
             "-password", "pass:\(passphrase)",
             "-name", "ICD360SVPN admin",
-            // Force a modern KDF the macOS SecPKCS12Import accepts.
-            "-keypbe", "PBE-SHA1-3DES",
-            "-certpbe", "PBE-SHA1-3DES",
         ]
         let stderrPipe = Pipe()
         process.standardError = stderrPipe
