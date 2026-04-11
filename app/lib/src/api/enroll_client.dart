@@ -105,8 +105,11 @@ class EnrollClient {
     }
 
     final friendly = switch (code400) {
-      400 => 'Codul are un format greșit. Verifică literele.',
-      404 => 'Cod invalid, expirat, sau deja folosit. Cere un cod nou.',
+      400 => 'Codul are un format greșit. Verifică ce ai tastat.',
+      404 => 'Cod invalid. Verifică literele și cifrele.',
+      409 => 'Cod deja folosit. Cere administratorului un cod nou.',
+      410 => 'Cod expirat (codul e valabil 10 minute). '
+          'Cere un cod nou.',
       429 => 'Prea multe încercări. Așteaptă un minut și reîncearcă.',
       503 => 'Serverul nu acceptă enrollment momentan.',
       _ => 'Eroare server (HTTP $code400)',

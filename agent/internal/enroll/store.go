@@ -15,12 +15,22 @@ import (
 const DefaultTTL = 10 * time.Minute
 
 // Entry is one record in the code → bundle store.
+//
+// We keep entries around even after they expire or are redeemed so
+// PopValid can return a specific reason (ErrExpired vs ErrAlreadyUsed
+// vs ErrNotFound) for friendlier client-side error messages. The
+// pruneExpired helper still drops them eventually — see its comment
+// for the retention window.
 type Entry struct {
-	Code      string    `json:"code"`
-	Bundle    []byte    `json:"bundle"` // raw JSON of the enrollment bundle
-	ExpiresAt time.Time `json:"expires_at"`
-	IssuedFor string    `json:"issued_for,omitempty"`
+	Code       string    `json:"code"`
+	Bundle     []byte    `json:"bundle"` // raw JSON of the enrollment bundle
+	ExpiresAt  time.Time `json:"expires_at"`
+	IssuedFor  string    `json:"issued_for,omitempty"`
+	RedeemedAt time.Time `json:"redeemed_at,omitempty"`
 }
+
+func (e Entry) isExpired(now time.Time) bool { return now.After(e.ExpiresAt) }
+func (e Entry) isRedeemed() bool             { return !e.RedeemedAt.IsZero() }
 
 // Store is a tiny on-disk JSON store for enrollment codes.
 //
@@ -66,38 +76,81 @@ func (s *Store) PutNamed(code, name string, bundle []byte, ttl time.Duration) er
 	})
 }
 
-// ErrNotFound is returned by PopValid when the code is unknown,
-// expired, or already redeemed.
-var ErrNotFound = errors.New("code not found, expired, or already used")
+// Distinct errors so the API handler can return a specific status
+// to the client. The original "don't reveal which" stance was
+// security theatre against the 32^16 keyspace + 10min TTL + global
+// rate limit; the UX cost was real (a user with a typo couldn't
+// tell whether to retry or get a fresh code), so we now distinguish.
+var (
+	ErrNotFound     = errors.New("code not found")
+	ErrExpired      = errors.New("code expired")
+	ErrAlreadyUsed  = errors.New("code already used")
+)
 
-// PopValid looks up a code, deletes it (single-use), and returns the
-// bundle. Returns ErrNotFound if no valid entry exists.
+// retentionAfterTerminal is how long we keep an entry around after
+// it expires or gets redeemed, so PopValid can still tell the client
+// "expired" or "already used" instead of "not found". After this
+// window the entry is pruned to keep the store from growing forever.
+const retentionAfterTerminal = 24 * time.Hour
+
+// PopValid looks up a code and returns the bundle on success. On
+// failure it returns a specific error: ErrNotFound (never existed),
+// ErrExpired (was valid but past its TTL), or ErrAlreadyUsed
+// (single-use semantics already consumed).
 func (s *Store) PopValid(code string) ([]byte, error) {
-	var bundle []byte
+	var (
+		bundle []byte
+		retErr error
+	)
 	err := s.modify(func(entries map[string]Entry) {
 		s.pruneExpired(entries)
 		e, ok := entries[code]
 		if !ok {
+			retErr = ErrNotFound
 			return
 		}
+		now := time.Now()
+		if e.isRedeemed() {
+			retErr = ErrAlreadyUsed
+			return
+		}
+		if e.isExpired(now) {
+			retErr = ErrExpired
+			return
+		}
+		// Mark redeemed (don't delete) so a second attempt with the
+		// same code returns ErrAlreadyUsed instead of ErrNotFound.
+		e.RedeemedAt = now
+		entries[code] = e
 		bundle = e.Bundle
-		delete(entries, code)
 	})
 	if err != nil {
 		return nil, err
 	}
-	if bundle == nil {
-		return nil, ErrNotFound
-	}
-	return bundle, nil
+	return bundle, retErr
 }
 
-// pruneExpired drops any entries whose ExpiresAt is in the past.
+// pruneExpired drops entries whose terminal state (expired OR
+// redeemed) is older than retentionAfterTerminal. Active entries
+// and recently-terminated entries are kept so PopValid can still
+// distinguish ErrExpired and ErrAlreadyUsed from ErrNotFound for
+// the friendly client error message.
+//
 // Caller must already hold the modify lock + flock.
 func (s *Store) pruneExpired(entries map[string]Entry) {
 	now := time.Now()
 	for k, v := range entries {
-		if now.After(v.ExpiresAt) {
+		// Active code: keep.
+		if !v.isExpired(now) && !v.isRedeemed() {
+			continue
+		}
+		// Terminal: keep until retention window passes so PopValid
+		// can return a specific error.
+		terminalAt := v.ExpiresAt
+		if v.isRedeemed() && v.RedeemedAt.After(terminalAt) {
+			terminalAt = v.RedeemedAt
+		}
+		if now.Sub(terminalAt) > retentionAfterTerminal {
 			delete(entries, k)
 		}
 	}

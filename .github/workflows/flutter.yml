@@ -137,23 +137,36 @@ jobs:
           channel: stable
       - uses: ./.github/actions/set-build-number
       - run: flutter create --platforms=macos --project-name icd360svpn --org de.icd360s .
-      - name: Overwrite macOS entitlements with network.client
-        # Flutter's default macos/Runner/Release.entitlements contains
-        # ONLY `com.apple.security.app-sandbox`. No `network.client`.
-        # That means a sandboxed macOS Flutter app cannot make ANY
-        # outbound network call: dart:io HttpClient gets
-        # `Failed host lookup: <host>` because the sandbox blocks
-        # the resolver before DNS even runs. We MUST add the
-        # entitlement, otherwise enroll, auto-update, and changelog
-        # all silently fail with DNS errors.
+      - name: Disable macOS app-sandbox entirely
+        # Why we drop app-sandbox entirely instead of layering on more
+        # entitlements (network.client, keychain-access-groups, etc):
         #
-        # The earlier (v1.2.1) attempt used `plutil -insert ... -bool YES`
-        # which the macos-latest plutil rejected with "Value YES not
-        # valid for key path", and the `|| echo` fallback swallowed
-        # the error so we shipped a broken DMG anyway. The bulletproof
-        # fix is to just overwrite the file with a known-good plist
-        # via heredoc — we control the full content, no plutil
-        # quirks, no shell escaping.
+        #   v1.2.0 shipped with default Flutter entitlements (just
+        #   `app-sandbox`). The user got "Failed host lookup" because
+        #   the sandbox blocked outbound DNS.
+        #
+        #   v1.2.2 added `network.client`. DNS now works. But the
+        #   user immediately hit `errSecMissingEntitlement -34018`
+        #   from flutter_secure_storage trying to access Keychain —
+        #   sandboxed apps need `keychain-access-groups` to talk to
+        #   the OS keychain, and we don't have it.
+        #
+        # We could keep adding entitlements one by one (next would
+        # be Documents file write for vpn_tunnel.dart, then maybe
+        # something else for path_provider...). Each one is another
+        # iteration, another failed DMG, another wasted CI cycle.
+        #
+        # The sandbox model is designed for App Store distribution
+        # where the user implicitly trusts Apple's review. We are
+        # NOT distributing through the App Store — there is no
+        # Apple Developer Program — and the user IS the admin who
+        # installed the app intentionally. The sandbox provides zero
+        # security in our threat model and a long tail of compat
+        # papercuts. Drop it.
+        #
+        # With sandbox off, network/keychain/files all "just work"
+        # like any other macOS desktop app. The entitlements file
+        # becomes a minimal stub.
         run: |
           set -e
           cat > macos/Runner/Release.entitlements <<'PLIST'
@@ -162,9 +175,7 @@ jobs:
           <plist version="1.0">
           <dict>
           	<key>com.apple.security.app-sandbox</key>
-          	<true/>
-          	<key>com.apple.security.network.client</key>
-          	<true/>
+          	<false/>
           </dict>
           </plist>
           PLIST
@@ -174,12 +185,8 @@ jobs:
           <plist version="1.0">
           <dict>
           	<key>com.apple.security.app-sandbox</key>
-          	<true/>
+          	<false/>
           	<key>com.apple.security.cs.allow-jit</key>
-          	<true/>
-          	<key>com.apple.security.network.server</key>
-          	<true/>
-          	<key>com.apple.security.network.client</key>
           	<true/>
           </dict>
           </plist>
@@ -188,10 +195,12 @@ jobs:
           cat macos/Runner/Release.entitlements
           echo "--- DebugProfile.entitlements ---"
           cat macos/Runner/DebugProfile.entitlements
-          # Hard fail if for some reason the keys are missing
-          grep -q 'com.apple.security.network.client' macos/Runner/Release.entitlements
-          grep -q 'com.apple.security.network.client' macos/Runner/DebugProfile.entitlements
-          echo "::notice::macOS entitlements include network.client"
+          # Hard fail if app-sandbox is somehow still true.
+          if grep -A1 'com.apple.security.app-sandbox' macos/Runner/Release.entitlements | grep -q '<true/>'; then
+            echo "::error::Release.entitlements still has app-sandbox=true"
+            exit 1
+          fi
+          echo "::notice::macOS app-sandbox disabled (Release + Debug)"
       - run: flutter pub get
       - run: flutter build macos --release
 

@@ -243,15 +243,6 @@ class _EnrollmentScreenState extends ConsumerState<EnrollmentScreen> {
                           );
                         }),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Doar litere și cifre. Fără spații sau '
-                        'caractere speciale.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
                       if (lastError != null) ...<Widget>[
                         const SizedBox(height: 16),
                         Container(

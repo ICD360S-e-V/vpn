@@ -82,10 +82,20 @@ func (h *handlers) postEnroll(w http.ResponseWriter, r *http.Request) {
 		// Slow down a bit. Bounds the brute-force rate well below
 		// what would matter against a 32^16 keyspace anyway.
 		time.Sleep(failureBackoff)
-		if errors.Is(err, enroll.ErrNotFound) {
-			// Don't reveal whether the code was wrong vs expired vs used.
+		switch {
+		case errors.Is(err, enroll.ErrNotFound):
 			writeError(w, http.StatusNotFound, "code-not-found",
-				"the code is invalid, expired, or already used")
+				"the code does not exist — check what you typed")
+			return
+		case errors.Is(err, enroll.ErrExpired):
+			// 410 Gone: the resource was once valid but is no longer.
+			writeError(w, http.StatusGone, "code-expired",
+				"the code expired (valid for 10 minutes after issue)")
+			return
+		case errors.Is(err, enroll.ErrAlreadyUsed):
+			// 409 Conflict: state conflict — code was already redeemed.
+			writeError(w, http.StatusConflict, "code-already-used",
+				"the code was already redeemed (single-use)")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "enroll-lookup-failed", err.Error())

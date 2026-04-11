@@ -19,6 +19,50 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.3] - 2026-04-11
+
+### Fixed — drop macOS sandbox entirely (errSecMissingEntitlement -34018)
+- v1.2.2 finally got DNS to resolve through the sandbox by adding
+  `com.apple.security.network.client`, but the user immediately hit
+  the next sandbox papercut: `flutter_secure_storage` failed with
+  `errSecMissingEntitlement -34018` when trying to write the cert
+  PEMs to the macOS Keychain. Sandboxed apps need
+  `keychain-access-groups` to access Keychain, and we don't have it.
+- We could keep adding entitlements one by one (next would be
+  Documents file write for vpn_tunnel.dart, then probably another),
+  but the sandbox is meaningless for a non-Apple-Developer-Program
+  app distributed outside the App Store anyway. The user IS the
+  admin who installed the app intentionally — the sandbox protects
+  against zero threats in our model and creates a long tail of
+  entitlement compatibility bugs.
+- Drop `com.apple.security.app-sandbox` entirely
+  (`<true/>` → `<false/>`). Network, Keychain, Files, child
+  processes — all "just work" now like any other macOS desktop app.
+  The CI step also hard-fails the build if app-sandbox somehow
+  comes back to `<true/>`.
+
+### Changed — distinguish invalid / expired / used codes (M7.7)
+- The agent's enroll store now keeps Entry records around for 24h
+  after they expire or get redeemed (instead of deleting them on
+  the spot), so PopValid can return one of three specific errors:
+  `ErrNotFound`, `ErrExpired`, `ErrAlreadyUsed`. The original
+  "don't reveal which" stance was security theatre against a
+  32^16 keyspace + 10-minute TTL + global rate limit; the UX cost
+  was real.
+- POST /v1/enroll now maps these to distinct HTTP statuses:
+  404 (not found), 410 Gone (expired), 409 Conflict (already used).
+  429 (rate limited) and 503 (disabled) are unchanged.
+- The Flutter EnrollClient maps each status to a specific Romanian
+  error message so the user knows whether to retype the code
+  (404), ask for a new one (410/409), or wait a minute (429).
+
+### Changed — drop hint text under the 4-box code entry
+- The "Doar litere și cifre. Fără spații sau caractere speciale."
+  hint is gone. The input filter still rejects everything outside
+  the 32-symbol unambiguous alphabet — the user finds out at the
+  first keystroke that diacritics / special chars are silently
+  dropped, no need to spell it out under the boxes.
+
 ## [1.2.2] - 2026-04-11
 
 ### Fixed — actually-working macOS network.client entitlement
@@ -276,6 +320,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
+[1.2.3]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.1.0...v1.2.0
