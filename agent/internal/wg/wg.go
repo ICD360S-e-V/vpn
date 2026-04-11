@@ -1,45 +1,53 @@
 package wg
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.zx2c4.com/wireguard/wgctrl"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
-// Manager owns the wg0.conf file and applies live changes to the
-// running interface via `wg syncconf`.
+// Manager owns the wg0.conf file (the persistent source of truth) AND
+// the live kernel interface state (read and mutated via wgctrl-go,
+// which talks netlink directly — no shelling out to `wg` or `wg-quick`).
+//
+// Every mutation goes through three coordinated steps:
+//   1. Acquire the on-disk flock (wg0.conf.lock).
+//   2. Edit + atomically rewrite wg0.conf so the change survives reboot.
+//   3. Apply the same change to the kernel via wgctrl.ConfigureDevice
+//      so existing peer sessions are not disrupted.
 type Manager struct {
 	confPath  string
 	iface     string
 	subnet    *net.IPNet
 	publicEnd string
 
-	mu sync.Mutex // serialises in-process callers; flock guards across processes
+	client *wgctrl.Client
+	mu     sync.Mutex // serialises in-process callers; flock guards across processes
 }
 
 // Peer is the typed representation of a single WireGuard peer combining
-// static config (from wg0.conf) and runtime state (from `wg show dump`).
+// static config (from wg0.conf) and runtime state (from wgctrl).
 type Peer struct {
-	Name            string    `json:"name"`
-	PublicKey       string    `json:"public_key"`
-	PresharedKey    string    `json:"-"` // never returned over the API
-	AllowedIPs      []string  `json:"allowed_ips"`
-	CreatedAt       time.Time `json:"created_at"`
-	CreatedBy       string    `json:"created_by,omitempty"`
-	Endpoint        string    `json:"endpoint,omitempty"`
+	Name            string     `json:"name"`
+	PublicKey       string     `json:"public_key"`
+	PresharedKey    string     `json:"-"` // never returned over the API
+	AllowedIPs      []string   `json:"allowed_ips"`
+	CreatedAt       time.Time  `json:"created_at"`
+	CreatedBy       string     `json:"created_by,omitempty"`
+	Endpoint        string     `json:"endpoint,omitempty"`
 	LastHandshakeAt *time.Time `json:"last_handshake_at,omitempty"`
-	RxBytesTotal    uint64    `json:"rx_bytes_total"`
-	TxBytesTotal    uint64    `json:"tx_bytes_total"`
+	RxBytesTotal    uint64     `json:"rx_bytes_total"`
+	TxBytesTotal    uint64     `json:"tx_bytes_total"`
 }
 
 // CreateRequest is what callers pass to Manager.Add.
@@ -54,25 +62,44 @@ type CreateResult struct {
 	ClientConfig string // ready-to-import wg .conf for the new client
 }
 
-// NewManager constructs a Manager. confPath is /etc/wireguard/wg0.conf,
-// iface is "wg0", subnet is the CIDR the server uses (e.g. 10.8.0.0/24),
-// publicEnd is the externally-reachable Endpoint clients should dial
-// (e.g. "vpn.icd360s.de:443").
+// NewManager constructs a Manager and opens a wgctrl client.
+//
+// Caller must call Close() at shutdown to release the netlink socket.
 func NewManager(confPath, iface, subnet, publicEnd string) (*Manager, error) {
 	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return nil, fmt.Errorf("invalid subnet %q: %w", subnet, err)
+	}
+	client, err := wgctrl.New()
+	if err != nil {
+		return nil, fmt.Errorf("open wgctrl: %w", err)
+	}
+	// Probe the interface immediately so any misconfiguration is loud.
+	if _, err := client.Device(iface); err != nil {
+		client.Close()
+		return nil, fmt.Errorf("wgctrl device %q: %w", iface, err)
 	}
 	return &Manager{
 		confPath:  confPath,
 		iface:     iface,
 		subnet:    ipnet,
 		publicEnd: publicEnd,
+		client:    client,
 	}, nil
 }
 
+// Close releases the netlink socket. Safe to call multiple times.
+func (m *Manager) Close() error {
+	if m.client == nil {
+		return nil
+	}
+	err := m.client.Close()
+	m.client = nil
+	return err
+}
+
 // List returns the current peers, joining static config from wg0.conf
-// with live transfer/handshake data from `wg show dump`.
+// with live transfer/handshake data from wgctrl.
 func (m *Manager) List(ctx context.Context) ([]Peer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -81,17 +108,17 @@ func (m *Manager) List(ctx context.Context) ([]Peer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read wg0.conf: %w", err)
 	}
-	live, err := m.dumpLive(ctx)
+	dev, err := m.client.Device(m.iface)
 	if err != nil {
 		// Non-fatal: we can still return static peer list without live data.
-		live = nil
+		return mergeConfigAndLive(cfg, nil), nil
 	}
-	return mergeConfigAndLive(cfg, live), nil
+	return mergeConfigAndLive(cfg, snapshotLivePeers(dev)), nil
 }
 
 // Add generates fresh keys + PSK, allocates the next free /32 in the
-// subnet, appends a [Peer] block to wg0.conf, applies the change with
-// `wg syncconf`, and returns the rendered client .conf.
+// subnet, appends a [Peer] block to wg0.conf, applies the change to
+// the kernel via wgctrl, and returns the rendered client .conf.
 func (m *Manager) Add(ctx context.Context, req CreateRequest) (*CreateResult, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, errors.New("peer name must not be empty")
@@ -120,46 +147,62 @@ func (m *Manager) Add(ctx context.Context, req CreateRequest) (*CreateResult, er
 		return nil, err
 	}
 
-	priv, pub, err := wgGenKeyPair(ctx)
+	priv, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
-		return nil, fmt.Errorf("generate keys: %w", err)
+		return nil, fmt.Errorf("generate private key: %w", err)
 	}
-	psk, err := wgGenPSK(ctx)
+	pub := priv.PublicKey()
+	psk, err := wgtypes.GenerateKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate psk: %w", err)
 	}
 
-	allowed := clientIP.String() + "/32"
-	cfg.addPeer(pub, psk, allowed, req.Name, req.CreatedBy)
+	allowedCIDR := clientIP.String() + "/32"
+	cfg.addPeer(pub.String(), psk.String(), allowedCIDR, req.Name, req.CreatedBy)
 
 	if err := writeConfigFile(m.confPath, cfg); err != nil {
 		return nil, fmt.Errorf("write wg0.conf: %w", err)
 	}
-	if err := m.syncConf(ctx); err != nil {
-		return nil, fmt.Errorf("apply via wg syncconf: %w", err)
+
+	// Apply to kernel without disrupting existing peers: ReplacePeers=false.
+	_, ipnet, err := net.ParseCIDR(allowedCIDR)
+	if err != nil {
+		return nil, fmt.Errorf("parse allowed cidr: %w", err)
+	}
+	pcfg := wgtypes.PeerConfig{
+		PublicKey:         pub,
+		PresharedKey:      &psk,
+		ReplaceAllowedIPs: true,
+		AllowedIPs:        []net.IPNet{*ipnet},
+	}
+	if err := m.client.ConfigureDevice(m.iface, wgtypes.Config{
+		ReplacePeers: false,
+		Peers:        []wgtypes.PeerConfig{pcfg},
+	}); err != nil {
+		return nil, fmt.Errorf("configure device: %w", err)
 	}
 
-	serverPub, err := m.serverPublicKey(ctx)
+	serverPub, err := m.serverPublicKey()
 	if err != nil {
 		return nil, fmt.Errorf("read server pubkey: %w", err)
 	}
 
 	clientConf := renderClientConfig(clientConfigInput{
-		ClientPrivateKey: priv,
-		ClientAddress:    allowed,
+		ClientPrivateKey: priv.String(),
+		ClientAddress:    allowedCIDR,
 		DNS:              "10.8.0.1",
 		MTU:              1420,
 		ServerPublicKey:  serverPub,
-		PresharedKey:     psk,
+		PresharedKey:     psk.String(),
 		Endpoint:         m.publicEnd,
 	})
 
 	peer := Peer{
-		Name:         req.Name,
-		PublicKey:    pub,
-		AllowedIPs:   []string{allowed},
-		CreatedAt:    time.Now().UTC(),
-		CreatedBy:    req.CreatedBy,
+		Name:       req.Name,
+		PublicKey:  pub.String(),
+		AllowedIPs: []string{allowedCIDR},
+		CreatedAt:  time.Now().UTC(),
+		CreatedBy:  req.CreatedBy,
 	}
 	return &CreateResult{Peer: peer, ClientConfig: clientConf}, nil
 }
@@ -191,7 +234,22 @@ func (m *Manager) Remove(ctx context.Context, pubkey string) error {
 	if err := writeConfigFile(m.confPath, cfg); err != nil {
 		return fmt.Errorf("write wg0.conf: %w", err)
 	}
-	return m.syncConf(ctx)
+
+	// Apply to kernel: ReplacePeers=false + Remove=true on this peer only.
+	parsedKey, err := wgtypes.ParseKey(pubkey)
+	if err != nil {
+		return fmt.Errorf("parse pubkey: %w", err)
+	}
+	if err := m.client.ConfigureDevice(m.iface, wgtypes.Config{
+		ReplacePeers: false,
+		Peers: []wgtypes.PeerConfig{{
+			PublicKey: parsedKey,
+			Remove:    true,
+		}},
+	}); err != nil {
+		return fmt.Errorf("configure device: %w", err)
+	}
+	return nil
 }
 
 // nextFreeIP returns the lowest unused host IP in the manager's subnet,
@@ -207,105 +265,45 @@ func (m *Manager) nextFreeIP(cfg *rawConfig) (net.IP, error) {
 	return nil, fmt.Errorf("no free IPs in %s", m.subnet)
 }
 
-// dumpLive runs `wg show <iface> dump` and parses each peer line.
-//
-// Format of `wg show <iface> dump` (man wg, section "Output Format"):
-//
-//	First line  (interface): private-key  public-key  listen-port  fwmark
-//	Other lines (peers):     public-key  preshared-key  endpoint  allowed-ips  latest-handshake  rx  tx  persistent-keepalive
-//
-// Fields are tab-separated. Empty values are reported as "(none)".
-func (m *Manager) dumpLive(ctx context.Context) (map[string]livePeer, error) {
-	out, err := exec.CommandContext(ctx, "wg", "show", m.iface, "dump").Output()
-	if err != nil {
-		return nil, fmt.Errorf("wg show dump: %w", err)
-	}
-	live := map[string]livePeer{}
-	for i, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
-		if i == 0 {
-			continue // interface line
-		}
-		fields := strings.Split(line, "\t")
-		if len(fields) < 8 {
-			continue
-		}
-		lp := livePeer{
-			PublicKey: fields[0],
-			Endpoint:  noneToEmpty(fields[2]),
-		}
-		if hs, err := strconv.ParseInt(fields[4], 10, 64); err == nil && hs > 0 {
-			t := time.Unix(hs, 0).UTC()
-			lp.LastHandshake = &t
-		}
-		if rx, err := strconv.ParseUint(fields[5], 10, 64); err == nil {
-			lp.Rx = rx
-		}
-		if tx, err := strconv.ParseUint(fields[6], 10, 64); err == nil {
-			lp.Tx = tx
-		}
-		live[lp.PublicKey] = lp
-	}
-	return live, nil
-}
-
-// serverPublicKey returns the server's WG public key from `wg show
-// <iface> dump`. Reading it from the running interface avoids touching
-// the private key file.
-func (m *Manager) serverPublicKey(ctx context.Context) (string, error) {
-	out, err := exec.CommandContext(ctx, "wg", "show", m.iface, "dump").Output()
+// serverPublicKey returns the server's WG public key from the live
+// kernel interface (no need to read the private key file).
+func (m *Manager) serverPublicKey() (string, error) {
+	dev, err := m.client.Device(m.iface)
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(string(out), "\n")
-	if len(lines) == 0 {
-		return "", errors.New("empty wg show output")
-	}
-	fields := strings.Split(lines[0], "\t")
-	if len(fields) < 2 {
-		return "", errors.New("malformed wg show interface line")
-	}
-	return fields[1], nil
+	return dev.PublicKey.String(), nil
 }
 
-// syncConf applies the on-disk wg0.conf to the live interface without
-// disrupting existing connections.
-//
-// We do not use `bash -c "wg syncconf wg0 <(wg-quick strip wg0)"`
-// because shelling out to bash adds an attack surface and brittle
-// quoting. Instead: run wg-quick strip to a buffer, write to a temp
-// file, pass the path to wg syncconf.
-func (m *Manager) syncConf(ctx context.Context) error {
-	stripped, err := exec.CommandContext(ctx, "wg-quick", "strip", m.iface).Output()
-	if err != nil {
-		return fmt.Errorf("wg-quick strip: %w", err)
-	}
-	tmp, err := os.CreateTemp("", "wg-syncconf-*.conf")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-	if _, err := tmp.Write(stripped); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	cmd := exec.CommandContext(ctx, "wg", "syncconf", m.iface, tmpPath)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("wg syncconf: %w (%s)", err, bytes.TrimSpace(out))
-	}
-	return nil
-}
-
-// livePeer is the per-peer data extracted from `wg show dump`.
+// livePeer is the per-peer runtime data extracted from wgctrl.
 type livePeer struct {
 	PublicKey     string
 	Endpoint      string
 	LastHandshake *time.Time
 	Rx            uint64
 	Tx            uint64
+}
+
+// snapshotLivePeers converts a wgtypes.Device into the by-pubkey map
+// the merge step expects.
+func snapshotLivePeers(dev *wgtypes.Device) map[string]livePeer {
+	out := make(map[string]livePeer, len(dev.Peers))
+	for _, p := range dev.Peers {
+		lp := livePeer{
+			PublicKey: p.PublicKey.String(),
+			Rx:        uint64(p.ReceiveBytes),
+			Tx:        uint64(p.TransmitBytes),
+		}
+		if p.Endpoint != nil {
+			lp.Endpoint = p.Endpoint.String()
+		}
+		if !p.LastHandshakeTime.IsZero() {
+			t := p.LastHandshakeTime.UTC()
+			lp.LastHandshake = &t
+		}
+		out[lp.PublicKey] = lp
+	}
+	return out
 }
 
 // mergeConfigAndLive walks the parsed config + the live state and
@@ -385,31 +383,6 @@ func renderClientConfig(in clientConfigInput) string {
 	return b.String()
 }
 
-// wgGenKeyPair runs `wg genkey | wg pubkey` and returns the (priv,pub) pair.
-func wgGenKeyPair(ctx context.Context) (string, string, error) {
-	priv, err := exec.CommandContext(ctx, "wg", "genkey").Output()
-	if err != nil {
-		return "", "", err
-	}
-	privTrim := strings.TrimSpace(string(priv))
-	pubCmd := exec.CommandContext(ctx, "wg", "pubkey")
-	pubCmd.Stdin = strings.NewReader(privTrim + "\n")
-	pub, err := pubCmd.Output()
-	if err != nil {
-		return "", "", err
-	}
-	return privTrim, strings.TrimSpace(string(pub)), nil
-}
-
-// wgGenPSK runs `wg genpsk` and returns the resulting key.
-func wgGenPSK(ctx context.Context) (string, error) {
-	out, err := exec.CommandContext(ctx, "wg", "genpsk").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
 // flockExclusive acquires an exclusive flock on path. The returned
 // closure releases it. Path is created mode 0600 if it does not exist.
 func flockExclusive(path string) (func(), error) {
@@ -468,11 +441,4 @@ func ipEqual(a, b net.IP) bool {
 		}
 	}
 	return true
-}
-
-func noneToEmpty(s string) string {
-	if s == "(none)" {
-		return ""
-	}
-	return s
 }
