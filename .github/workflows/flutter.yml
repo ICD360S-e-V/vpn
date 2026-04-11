@@ -16,8 +16,14 @@ defaults:
   run:
     working-directory: app
 
-# All actions/* updated to versions that ship Node.js 24, removing
-# the M5.3 deprecation warnings about Node.js 20.
+# Force every JavaScript action to run on Node.js 24 even if its
+# manifest still declares "node20" (actions/upload-artifact@v5 is
+# the current culprit — its v5 line ships Node 20 internally even
+# though we're on the @v5 tag). Once GitHub flips Node 24 to the
+# default in June 2026, this env var becomes a no-op and can be
+# dropped.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ─────────────────────────────────────────────────────────────
