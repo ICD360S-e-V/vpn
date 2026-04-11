@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api/api_client.dart';
+import 'api/app_prefs.dart';
 import 'api/enroll_client.dart';
 import 'api/secure_store.dart';
 import 'features/enrollment/enrollment_screen.dart';
@@ -135,14 +136,16 @@ class AppPhaseController extends Notifier<AppPhase> {
 // Root widget
 // ---------------------------------------------------------------
 
-class ICD360SVPNApp extends StatelessWidget {
+class ICD360SVPNApp extends ConsumerWidget {
   const ICD360SVPNApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
     return MaterialApp(
       title: 'ICD360S VPN',
       debugShowCheckedModeBanner: false,
+      themeMode: mode,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../api/api_client.dart';
+import '../../common/needs_vpn_view.dart';
 import '../../models/api_error.dart';
 import '../../models/peer.dart';
 import 'create_peer_dialog.dart';
@@ -24,6 +25,7 @@ class _PeersScreenState extends State<PeersScreen> {
   List<Peer> _peers = const <Peer>[];
   bool _loading = false;
   String? _error;
+  bool _needsVpn = false;
 
   @override
   void initState() {
@@ -39,10 +41,14 @@ class _PeersScreenState extends State<PeersScreen> {
       setState(() {
         _peers = peers;
         _error = null;
+        _needsVpn = false;
       });
     } on ApiError catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
+      setState(() {
+        _needsVpn = e.kind == ApiErrorKind.transport;
+        _error = _needsVpn ? null : e.message;
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -138,6 +144,9 @@ class _PeersScreenState extends State<PeersScreen> {
   }
 
   Widget _buildBody() {
+    if (_needsVpn && _peers.isEmpty) {
+      return NeedsVpnView(onRetry: _load, isRetrying: _loading);
+    }
     if (_error != null && _peers.isEmpty) {
       return Center(
         child: Column(

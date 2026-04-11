@@ -145,9 +145,18 @@ class ApiClient {
         options: Options(method: method),
       );
     } on DioException catch (e) {
+      // The agent listens on https://10.8.0.1:8443 which is reachable
+      // ONLY through the WireGuard tunnel. If the user hasn't activated
+      // the tunnel yet (or it dropped), every request fails with
+      // connection refused / host unreachable / DNS lookup failed.
+      // The raw dart:io message ("...this indicates an error which
+      // most likely cannot be solved by the library") is meaningless
+      // to a non-developer; replace it with a clear Romanian prompt.
       throw ApiError(
         kind: ApiErrorKind.transport,
-        message: e.message ?? 'transport failure',
+        message: 'Vă rugăm să vă conectați la VPN pentru a fi afișate '
+            'datele. Apăsați butonul "Connect to VPN" din colțul '
+            'din dreapta-jos și activați tunelul în WireGuard.',
       );
     }
 

@@ -1,153 +1,57 @@
 // ICD360SVPN — lib/src/features/settings/settings_screen.dart
+//
+// M7.9 cleanup: the Account / Logout card was moved to the sidebar
+// (NavigationRail trailing actions in MainShell) and the Version /
+// Check-for-updates card was removed because the same controls now
+// live in the persistent app footer (every screen). What remains
+// here is just project links / about information.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../api/update_service.dart';
-import '../../app.dart';
-import '../about/changelog_screen.dart';
-import '../updates/update_available_dialog.dart';
-
-class SettingsScreen extends ConsumerStatefulWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  String _version = '…';
-  String _build = '';
-  bool _checkingForUpdate = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (!mounted) return;
-      setState(() {
-        _version = info.version;
-        _build = info.buildNumber;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _version = 'dev');
-    }
-  }
-
-  Future<void> _checkForUpdate() async {
-    setState(() => _checkingForUpdate = true);
-    await ref.read(updateNotifierProvider.notifier).checkNow();
-    if (!mounted) return;
-    setState(() => _checkingForUpdate = false);
-    final info = ref.read(updateNotifierProvider);
-    if (!mounted) return;
-    if (info != null) {
-      await showDialog<void>(
-        context: context,
-        builder: (_) => UpdateAvailableDialog(info: info),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are on the latest version.')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: <Widget>[
+        children: const <Widget>[
           Card(
             child: Column(
               children: <Widget>[
-                const ListTile(
-                  title: Text('Account'),
+                ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('Despre aplicație'),
                   subtitle: Text(
-                    'Logging out clears the cert from the OS keychain. '
-                    'You will need to enroll again with a fresh '
-                    'vpn-agent issue-code output.',
+                    'Aplicație de management pentru serverul WireGuard '
+                    'al ICD360S e.V. Conectarea, enrollment-ul și '
+                    'actualizările automate sunt disponibile prin '
+                    'butoanele din sidebar și footer.',
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.red),
-                  title: const Text(
-                    'Log out',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  onTap: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Log out?'),
-                        content: const Text(
-                          'This will remove the saved client certificate '
-                          'from this device.',
-                        ),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Log out'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed == true) {
-                      await ref.read(appPhaseProvider.notifier).logout();
-                    }
-                  },
+                  leading: Icon(Icons.link),
+                  title: Text('github.com/ICD360S-e-V/vpn'),
+                  subtitle: Text('Cod sursă, issues, releases'),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Card(
-            child: Column(
-              children: <Widget>[
-                ListTile(
-                  title: const Text('Version'),
-                  subtitle: Text(
-                    'icd360svpn $_version (build $_build) — '
-                    'tap to see release notes',
-                  ),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ChangelogScreen(),
-                      ),
-                    );
-                  },
-                  trailing: _checkingForUpdate
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : TextButton(
-                          onPressed: _checkForUpdate,
-                          child: const Text('Check for updates'),
-                        ),
-                ),
-                const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.link),
-                  title: Text('github.com/ICD360S-e-V/vpn'),
-                ),
-              ],
+            child: ListTile(
+              leading: Icon(Icons.help_outline),
+              title: Text('Cum activez VPN-ul?'),
+              subtitle: Text(
+                'Apasă butonul "Connect to VPN" din colțul din '
+                'dreapta-jos. macOS îți va cere parola de admin '
+                'pentru a activa tunelul WireGuard. Necesită '
+                'wireguard-tools instalat: `brew install wireguard-tools`.',
+              ),
             ),
           ),
         ],

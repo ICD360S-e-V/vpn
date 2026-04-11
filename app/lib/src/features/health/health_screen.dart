@@ -7,7 +7,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../common/needs_vpn_view.dart';
 import '../../common/status_badge.dart';
+import '../../models/api_error.dart';
 import '../../models/health.dart';
 
 class HealthScreen extends StatefulWidget {
@@ -22,6 +24,8 @@ class HealthScreen extends StatefulWidget {
 class _HealthScreenState extends State<HealthScreen> {
   Health? _health;
   String? _error;
+  bool _needsVpn = false;
+  bool _fetching = false;
   Timer? _timer;
 
   @override
@@ -38,16 +42,27 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Future<void> _fetch() async {
+    if (_fetching) return;
+    setState(() => _fetching = true);
     try {
       final h = await widget.client.health();
       if (!mounted) return;
       setState(() {
         _health = h;
         _error = null;
+        _needsVpn = false;
+      });
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _needsVpn = e.kind == ApiErrorKind.transport;
+        _error = _needsVpn ? null : e.message;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _fetching = false);
     }
   }
 
@@ -70,6 +85,9 @@ class _HealthScreenState extends State<HealthScreen> {
   }
 
   Widget _buildBody() {
+    if (_health == null && _needsVpn) {
+      return NeedsVpnView(onRetry: _fetch, isRetrying: _fetching);
+    }
     if (_health == null && _error != null) {
       return Center(child: Text(_error!));
     }

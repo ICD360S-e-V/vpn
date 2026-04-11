@@ -19,6 +19,77 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.5] - 2026-04-11
+
+### Added — real Connect/Disconnect VPN via wg-quick + admin prompt (M7.9)
+- The Connect to VPN button no longer just saves a `.conf` to
+  `~/Documents` and asks the user to import it manually. It now
+  performs a REAL `wg-quick up` via `osascript -e 'do shell script
+  ... with administrator privileges'`, which produces the standard
+  macOS Touch ID / password prompt. After the user authenticates,
+  the WireGuard tunnel comes up and the app can immediately reach
+  the agent at `https://10.8.0.1:8443`.
+- Symmetric Disconnect via `wg-quick down`. The FAB cycles between
+  "Connect to VPN" / "Disconnect VPN" and changes color depending
+  on the live tunnel status.
+- A 5-second background poller probes `wg show interfaces` to keep
+  the FAB in sync with externally-induced state changes (user
+  toggled the tunnel from a Terminal, etc.).
+- Auto-installs wireguard-tools via Homebrew on first Connect if
+  it's missing. The app detects Homebrew at the standard install
+  paths (`/opt/homebrew/bin/brew` or `/usr/local/bin/brew`), pops
+  a confirmation dialog ("Vrei să instalez wireguard-tools acum
+  automat?"), and runs `brew install wireguard-tools` with a
+  progress snackbar. If Homebrew itself is missing, the error
+  points the user at https://brew.sh.
+- Why not a Flutter NetworkExtension plugin: every Flutter
+  WireGuard package on pub.dev (wireguard_flutter,
+  wireguard_flutter_plus, wireguard_dart, flutter_wireguard_vpn)
+  requires Apple's NetworkExtension entitlement, which in turn
+  requires an Apple Developer Program membership ($99/year). The
+  user explicitly opted out, so we use the same shell-out pattern
+  as Tunnelblick / OpenVPN Connect.
+- Linux: same flow via `pkexec wg-quick up`. Windows: not yet.
+
+### Changed — clear "please connect to VPN" prompt on Peers / Health
+- The Peers and Health screens used to display the raw dart:io
+  exception ("Connection failed; this indicates an error which
+  most likely cannot be solved by the library") when the agent
+  was unreachable. The cause is invariably "the WireGuard tunnel
+  is not active yet" — meaningless dart message, frustrating UX.
+- New `lib/src/common/needs_vpn_view.dart` shows a friendly
+  Romanian prompt: "Conectează-te la VPN. Datele se afișează doar
+  prin tunelul WireGuard. Apasă butonul Connect to VPN..." with
+  a Reîncarcă button. Both Peers and Health switch to this view
+  on transport-level failures (`ApiError.kind ==
+  ApiErrorKind.transport`).
+- `api_client.dart` now produces a Romanian message body for any
+  DioException so even screens that haven't migrated to
+  NeedsVpnView yet show something readable instead of the raw
+  dart:io text.
+
+### Changed — sidebar gets logout + dark-mode toggle (M7.9)
+- The Account / Logout card was moved out of Settings into the
+  NavigationRail trailing actions in MainShell. One click to log
+  out from anywhere instead of three.
+- New theme-mode toggle icon button next to the logout button in
+  the sidebar. Cycles System → Light → Dark → System. The choice
+  is persisted to `prefs.json` in the app support dir via the
+  new `lib/src/api/app_prefs.dart` so the next launch starts in
+  the same theme.
+- Settings screen now contains only About / Help content. The
+  Version + Check-for-updates row was redundant with the footer
+  (which has both controls on every screen) and is gone.
+
+### Fixed — Connect to VPN button no longer overlaps the footer
+- The default Material `floatingActionButtonLocation: endFloat`
+  put the FAB at the bottom-right of the Scaffold body, which
+  on screens with a custom footer (every screen here) means the
+  FAB sat ON TOP OF the version label and check-updates button.
+- New `_AboveFooterFabLocation` custom location lifts the FAB by
+  `footerHeight + margin` pixels so it floats above the footer
+  with clear separation.
+
 ## [1.2.4] - 2026-04-11
 
 ### Fixed — replace flutter_secure_storage with file-backed storage
@@ -370,6 +441,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
+[1.2.5]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.1...v1.2.2
