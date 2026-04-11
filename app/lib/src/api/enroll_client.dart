@@ -10,7 +10,6 @@
 // on a public LE certificate; the only secret in the request is the
 // 16-char code itself, which the user typed.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 

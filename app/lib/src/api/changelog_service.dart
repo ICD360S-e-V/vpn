@@ -15,7 +15,6 @@
 // copies it into out/updates/CHANGELOG.md alongside version.json,
 // which gets rsynced to the nginx vhost on vpn.icd360s.de.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 

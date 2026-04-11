@@ -85,7 +85,7 @@ class _EnrollmentScreenState extends ConsumerState<EnrollmentScreen> {
       final end = start + _charsPerBox;
       _controllers[i].value = TextEditingValue(
         text: code16.substring(start, end),
-        selection: TextSelection.collapsed(offset: _charsPerBox),
+        selection: const TextSelection.collapsed(offset: _charsPerBox),
       );
     }
     _focusNodes.last.requestFocus();
@@ -185,10 +185,10 @@ class _EnrollmentScreenState extends ConsumerState<EnrollmentScreen> {
                           color: theme.colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(
+                        child: const Text(
                           'sudo vpn-agent issue-code numele-tau',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 13,
                           ),
