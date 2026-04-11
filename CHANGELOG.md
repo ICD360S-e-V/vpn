@@ -10,6 +10,48 @@ short and user-facing.
 
 ## [Unreleased]
 
+### Added — short-code enrollment (M7.1, M7.3)
+- New `vpn-agent issue-code <name>` subcommand prints a 16-char
+  `XXXX-XXXX-XXXX-XXXX` one-time code (32-symbol unambiguous
+  alphabet, no 0/O/1/I/L). The code maps to a bundle stored in
+  `/var/lib/vpn-agent/enrollment_codes.json` with a 10-minute TTL,
+  single-use semantics, and auto-pruning of expired entries.
+- New plaintext HTTP listener on `127.0.0.1:8081` with the single
+  endpoint `POST /v1/enroll`. Reverse-proxied by nginx as
+  `https://vpn.icd360s.de/enroll`. The endpoint:
+  - Accepts `{"code": "XXXX-XXXX-XXXX-XXXX"}` (case insensitive,
+    dashes optional, whitespace stripped).
+  - Rate-limits to 5 attempts per source IP per minute via the
+    new `internal/api/ratelimit.go` fixed-window limiter.
+  - Returns the bundle JSON on success, 404 on
+    invalid/expired/already-used code (does not distinguish), 429
+    on rate limit.
+- The enrollment bundle is now **version 2** and includes EVERYTHING
+  the admin app needs in one shot:
+  - admin client cert + key + CA cert (mTLS to talk to vpn-agent)
+  - **WireGuard peer config** (rendered .conf with allocated /32,
+    PSK, endpoint vpn.icd360s.de:443) — the app can now bring up
+    its own tunnel without the user having to import peer1.conf
+    into a separate WireGuard.app first
+  - The peer is created via the existing `wg.Manager.Add()` code
+    path, so wg0.conf is updated atomically and the kernel state
+    is in lockstep via wgctrl.
+- Removed the legacy `vpn-agent issue-bundle` subcommand. The
+  base64+gzip+json blob it printed was technically clean but
+  user-hostile (1500-char paste). One way to enroll, one paste.
+
+### Added — Go agent CI workflow (M7.1)
+- New `.github/workflows/agent.yml` that builds the Go agent on
+  ubuntu-latest with `actions/setup-go@v6`, runs `go vet` and
+  `go test`, produces a static `vpn-agent` binary, and (on push to
+  main or tag) rsyncs it via the existing `vpn-deploy` SSH user
+  into `/var/www/html/_agent_drop/vpn-agent`. A systemd path unit
+  on the server (`vpn-agent-deploy.path`) detects the file,
+  validates it's an ELF, installs to `/usr/local/sbin/vpn-agent`,
+  restarts `vpn-agent.service`, and removes the drop file.
+- This eliminates "build the Go agent on alma + scp manually"
+  from the workflow. End-to-end push → live in ~30 seconds.
+
 ## [1.0.2] - 2026-04-11
 
 ### Fixed

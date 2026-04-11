@@ -9,17 +9,15 @@
 //
 //	vpn-agent serve [flags]              Run the HTTP server
 //	vpn-agent issue-cert <name> [flags]  Issue a client cert as 3 PEM files
-//	vpn-agent issue-bundle <name> [flgs] Issue a client cert as a single
-//	                                     base64-gzip-json blob ready to
-//	                                     paste into the admin app
+//	vpn-agent issue-code <name> [flags]  Issue a one-time XXXX-XXXX-XXXX-XXXX
+//	                                     code that the admin app exchanges
+//	                                     for an enrollment bundle (admin
+//	                                     cert + WireGuard peer config)
 //	vpn-agent version                    Print version
 package main
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -31,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ICD360S-e-V/vpn/agent/internal/api"
+	"github.com/ICD360S-e-V/vpn/agent/internal/enroll"
 	"github.com/ICD360S-e-V/vpn/agent/internal/mtls"
 	"github.com/ICD360S-e-V/vpn/agent/internal/stats"
 	"github.com/ICD360S-e-V/vpn/agent/internal/wg"
@@ -56,8 +55,8 @@ func main() {
 		cmdServe(args)
 	case "issue-cert":
 		cmdIssueCert(args)
-	case "issue-bundle":
-		cmdIssueBundle(args)
+	case "issue-code":
+		cmdIssueCode(args)
 	case "version", "--version", "-v":
 		fmt.Println("vpn-agent", version)
 	case "help", "--help", "-h":
@@ -74,10 +73,14 @@ func usage() {
 
 Usage:
     vpn-agent serve [flags]                 Run the HTTPS API server (mTLS required)
-    vpn-agent issue-cert   <name> [flags]   Issue a client cert as 3 PEM files
-    vpn-agent issue-bundle <name> [flags]   Issue a client cert as a single
-                                            base64-gzip-json blob ready to paste
-                                            into the admin app's enrollment field
+    vpn-agent issue-cert <name> [flags]     Issue a client cert as 3 PEM files
+                                            (legacy / scripting workflow)
+    vpn-agent issue-code <name> [flags]     Issue a one-time XXXX-XXXX-XXXX-XXXX
+                                            enrollment code. The user types it
+                                            into the admin app and the app
+                                            exchanges it for the bundle
+                                            (admin cert + WireGuard peer config)
+                                            via POST https://vpn.icd360s.de/enroll
     vpn-agent version                       Print version
 
 Run "vpn-agent <command> -h" for command-specific flags.
@@ -110,6 +113,12 @@ func cmdServe(args []string) {
 		"how often the sampler reads wgctrl byte counters")
 	statsRetention := fs.Duration("stats-retention", 90*24*time.Hour,
 		"how long to keep raw bandwidth samples before pruning")
+	enrollListen := fs.String("enroll-listen", "127.0.0.1:8081",
+		"plaintext listener for the public /enroll endpoint, behind nginx (empty disables)")
+	enrollStorePath := fs.String("enroll-store", "/var/lib/vpn-agent/enrollment_codes.json",
+		"file-backed store of pending enrollment codes")
+	enrollRateLimit := fs.Int("enroll-rate-limit", 5,
+		"max enrollment attempts per source IP per minute")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -145,18 +154,24 @@ func cmdServe(args []string) {
 		os.Exit(1)
 	}
 
+	enrollStore := enroll.New(*enrollStorePath)
+	enrollLimiter := api.NewRateLimiter(*enrollRateLimit, time.Minute)
+
 	srv, err := api.NewServer(api.Config{
-		Listen:      *listenAddr,
-		WGInterface: *wgIface,
-		AdGuardURL:  *adguardURL,
-		AdGuardUser: *adguardUser,
-		AdGuardPass: *adguardPass,
-		CA:          ca,
-		ServerCert:  serverCert,
-		WG:          wgMgr,
-		Stats:       statsStore,
-		Version:     version,
-		Started:     time.Now(),
+		Listen:        *listenAddr,
+		EnrollListen:  *enrollListen,
+		WGInterface:   *wgIface,
+		AdGuardURL:    *adguardURL,
+		AdGuardUser:   *adguardUser,
+		AdGuardPass:   *adguardPass,
+		CA:            ca,
+		ServerCert:    serverCert,
+		WG:            wgMgr,
+		Stats:         statsStore,
+		EnrollStore:   enrollStore,
+		EnrollLimiter: enrollLimiter,
+		Version:       version,
+		Started:       time.Now(),
 	})
 	if err != nil {
 		slog.Error("server build failed", "err", err)
@@ -235,53 +250,68 @@ func cmdIssueCert(args []string) {
 	fmt.Printf("Files: %s.pem  %s.key  %s-ca.pem\n", name, name, name)
 }
 
-// enrollmentBundle is the JSON wire format embedded inside the
-// `vpn-agent issue-bundle` output. The `Version` field lets the
-// Flutter admin app refuse incompatible bundles cleanly. Bumped
-// whenever fields are added or removed.
+// enrollmentBundle is the JSON wire format the admin app downloads
+// from `POST /v1/enroll`. Version 2 (M7.1) added the wireguard_*
+// fields so the bundle now contains EVERYTHING the app needs to
+// bring up its own tunnel — admins no longer have to import a
+// separate `peer1.conf` into the standalone WireGuard.app first.
 type enrollmentBundle struct {
-	Version  int       `json:"version"`
-	Name     string    `json:"name"`
-	IssuedAt time.Time `json:"issued_at"`
-	AgentURL string    `json:"agent_url"`
-	CertPEM  string    `json:"cert_pem"`
-	KeyPEM   string    `json:"key_pem"`
-	CAPEM    string    `json:"ca_pem"`
+	Version            int       `json:"version"`
+	Name               string    `json:"name"`
+	IssuedAt           time.Time `json:"issued_at"`
+	AgentURL           string    `json:"agent_url"`
+	CertPEM            string    `json:"cert_pem"`
+	KeyPEM             string    `json:"key_pem"`
+	CAPEM              string    `json:"ca_pem"`
+	WireguardConfig    string    `json:"wireguard_config"`     // rendered .conf for WireGuard.app import
+	WireguardPublicKey string    `json:"wireguard_public_key"` // for revoke later
+	WireguardAddress   string    `json:"wireguard_address"`    // e.g. "10.8.0.7/32"
 }
 
-const enrollmentBundleVersion = 1
+const enrollmentBundleVersion = 2
 
-// cmdIssueBundle handles `vpn-agent issue-bundle <name>`.
+// cmdIssueCode handles `vpn-agent issue-code <name>`.
 //
-// It generates a fresh client cert + key signed by the local CA,
-// bundles them with the CA cert and the agent URL into a JSON, gzips
-// it, base64-encodes it, and prints the resulting single-line blob to
-// stdout (followed by a newline). The admin pastes that blob into the
-// macOS / Flutter app's enrollment field — one input, no copying
-// three separate PEMs.
-//
-// The output is intentionally a single ASCII-safe line so it survives
-// being copied through SSH terminals, Slack messages, or printed
-// instructions. Standard base64 (not URL-safe) is used because the
-// blob is not embedded in URLs.
-func cmdIssueBundle(args []string) {
-	fs := flag.NewFlagSet("issue-bundle", flag.ExitOnError)
+// 1. Generate a fresh admin client cert + key signed by the local CA.
+// 2. Generate a fresh WireGuard peer (keys, PSK, allocated /32) and
+//    add it to wg0.conf via the wg.Manager (same code path as
+//    POST /v1/peers — atomic write + wgctrl apply).
+// 3. Bundle everything as enrollmentBundleV2 JSON.
+// 4. Generate a 16-char one-time code (XXXX-XXXX-XXXX-XXXX), store
+//    the bundle under it in the file-backed enroll.Store with a 10-
+//    minute TTL.
+// 5. Print the code to stdout. The admin reads it to the user; the
+//    user types it into the app; the app POSTs it to /v1/enroll and
+//    receives the bundle.
+func cmdIssueCode(args []string) {
+	fs := flag.NewFlagSet("issue-code", flag.ExitOnError)
 	certDir := fs.String("cert-dir", "/etc/vpn-agent",
 		"directory containing the CA")
 	agentURL := fs.String("agent-url", "https://10.8.0.1:8443",
-		"URL the admin app should dial — must be reachable through the WireGuard tunnel")
-	wrap := fs.Bool("wrap", false,
-		"wrap the output at 76 columns for human readability (the app accepts both forms)")
+		"URL the admin app should dial after enrolling — must be reachable through the WireGuard tunnel")
+	wgConfig := fs.String("wg-config", "/etc/wireguard/wg0.conf",
+		"WireGuard server config file")
+	wgIface := fs.String("wg-interface", "wg0",
+		"WireGuard interface to manage")
+	wgSubnet := fs.String("wg-subnet", "10.8.0.0/24",
+		"WireGuard subnet for peer IP allocation")
+	publicEnd := fs.String("public-endpoint", "vpn.icd360s.de:443",
+		"WireGuard public endpoint clients dial")
+	enrollStorePath := fs.String("enroll-store", "/var/lib/vpn-agent/enrollment_codes.json",
+		"file-backed store of pending enrollment codes")
+	ttl := fs.Duration("ttl", enroll.DefaultTTL,
+		"how long the issued code stays valid before it expires")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
 	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "issue-bundle requires a name argument, e.g. 'andrei-laptop'")
+		fmt.Fprintln(os.Stderr, "issue-code requires a name argument, e.g. 'andrei-laptop'")
 		fmt.Fprintln(os.Stderr, "all flags must appear BEFORE the name")
 		os.Exit(2)
 	}
 	name := fs.Arg(0)
 
+	// Step 1: admin client cert.
 	ca, err := mtls.LoadOrCreateCA(*certDir)
 	if err != nil {
 		slog.Error("CA load failed", "err", err)
@@ -289,58 +319,74 @@ func cmdIssueBundle(args []string) {
 	}
 	certPEM, keyPEM, caPEM, err := ca.IssueClientCertPEM(name)
 	if err != nil {
-		slog.Error("issue failed", "err", err)
+		slog.Error("issue cert failed", "err", err)
 		os.Exit(1)
 	}
 
-	bundle := enrollmentBundle{
-		Version:  enrollmentBundleVersion,
-		Name:     name,
-		IssuedAt: time.Now().UTC(),
-		AgentURL: *agentURL,
-		CertPEM:  string(certPEM),
-		KeyPEM:   string(keyPEM),
-		CAPEM:    string(caPEM),
+	// Step 2: WireGuard peer via the same Manager the daemon uses.
+	wgMgr, err := wg.NewManager(*wgConfig, *wgIface, *wgSubnet, *publicEnd)
+	if err != nil {
+		slog.Error("wg manager open failed", "err", err)
+		os.Exit(1)
 	}
-	jsonBytes, err := json.Marshal(bundle)
+	defer wgMgr.Close()
+
+	created, err := wgMgr.Add(context.Background(), wg.CreateRequest{
+		Name:      name,
+		CreatedBy: "issue-code",
+	})
+	if err != nil {
+		slog.Error("wg peer create failed", "err", err)
+		os.Exit(1)
+	}
+
+	// Step 3: bundle.
+	bundle := enrollmentBundle{
+		Version:            enrollmentBundleVersion,
+		Name:               name,
+		IssuedAt:           time.Now().UTC(),
+		AgentURL:           *agentURL,
+		CertPEM:            string(certPEM),
+		KeyPEM:             string(keyPEM),
+		CAPEM:              string(caPEM),
+		WireguardConfig:    created.ClientConfig,
+		WireguardPublicKey: created.Peer.PublicKey,
+	}
+	if len(created.Peer.AllowedIPs) > 0 {
+		bundle.WireguardAddress = created.Peer.AllowedIPs[0]
+	}
+	bundleJSON, err := json.Marshal(bundle)
 	if err != nil {
 		slog.Error("marshal bundle", "err", err)
 		os.Exit(1)
 	}
 
-	var gzbuf bytes.Buffer
-	gz := gzip.NewWriter(&gzbuf)
-	if _, err := gz.Write(jsonBytes); err != nil {
-		slog.Error("gzip bundle", "err", err)
+	// Step 4: code + store.
+	code, err := enroll.Generate()
+	if err != nil {
+		slog.Error("code generate failed", "err", err)
 		os.Exit(1)
 	}
-	if err := gz.Close(); err != nil {
-		slog.Error("gzip close", "err", err)
+	normalized, err := enroll.Normalize(code)
+	if err != nil {
+		slog.Error("code normalize failed", "err", err)
+		os.Exit(1)
+	}
+	store := enroll.New(*enrollStorePath)
+	if err := store.PutNamed(normalized, name, bundleJSON, *ttl); err != nil {
+		slog.Error("enroll store put failed", "err", err)
 		os.Exit(1)
 	}
 
-	encoded := base64.StdEncoding.EncodeToString(gzbuf.Bytes())
-
-	if *wrap {
-		// Wrap at 76 columns for emails / printed runbooks. The app
-		// strips whitespace before decoding, so both forms work.
-		for i := 0; i < len(encoded); i += 76 {
-			end := i + 76
-			if end > len(encoded) {
-				end = len(encoded)
-			}
-			fmt.Println(encoded[i:end])
-		}
-	} else {
-		fmt.Println(encoded)
-	}
-
-	// Friendly footer on stderr so it does not get captured into a
-	// pipe but is still visible to a human running the command.
+	// Step 5: stdout = the code, stderr = friendly footer.
+	fmt.Println(code)
 	fmt.Fprintf(os.Stderr,
-		"\n# enrollment bundle for %q (%d bytes raw, %d bytes encoded)\n"+
-			"# paste the line(s) above into the admin app's enrollment field.\n",
-		name, len(jsonBytes), len(encoded))
+		"\n"+
+			"# enrollment code for %q\n"+
+			"# valid %s, single-use\n"+
+			"# wireguard peer allocated: %s\n"+
+			"# tell the user to type the code into the admin app's enrollment screen\n",
+		name, ttl.Round(time.Second), bundle.WireguardAddress)
 }
 
 // refuseIfPublicListen returns nil if addr's host is loopback, link-local,
