@@ -140,6 +140,30 @@ project — there is no `--no-codesign` flag for `build macos` (only
 `build ios` and `build ipa` accept it). The CI runner produces an
 unsigned `.app` because no developer identity is installed.
 
+## Releasing
+
+The workflow ships in two modes:
+
+- **On every push to `main`** that touches `app/`: runs `analyze`
+  and the build matrix as a smoke test. Artifacts are stored as
+  workflow artifacts (expire in 90 days, no GitHub Release).
+- **On a `v*` tag push** (e.g. `git tag v1.0.0 && git push --tags`):
+  runs the same matrix, then a `release` job that downloads every
+  artifact, computes SHA256 sums, generates `version.json`, creates
+  a GitHub Release, and (if `VPN_DEPLOY_SSH_KEY` secret is set)
+  rsyncs the whole tree to `vpn.icd360s.de` so the auto-updater can
+  see it at:
+
+  | URL | Hosted by |
+  |---|---|
+  | `https://vpn.icd360s.de/updates/version.json` | nginx on vpn.icd360s.de |
+  | `https://vpn.icd360s.de/download/vpn-management_icd360sev/<platform>/<filename>` | nginx on vpn.icd360s.de |
+  | `https://github.com/ICD360S-e-V/vpn/releases/tag/v1.0.0` | GitHub Releases (mirror) |
+
+See [`docs/release.md`](../docs/release.md) for the full release
+procedure: tag → CI builds + uploads → version.json published →
+clients see the update banner within 24h.
+
 ## CI
 
 `.github/workflows/flutter.yml` runs the following jobs on every

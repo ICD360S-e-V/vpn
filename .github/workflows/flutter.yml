@@ -3,9 +3,11 @@ name: Flutter app build
 on:
   push:
     branches: [main]
-    paths:
-      - 'app/**'
-      - '.github/workflows/flutter.yml'
+    tags: ['v*']
+    paths-ignore:
+      - 'agent/**'
+      - 'docs/**'
+      - 'CHANGELOG.md'
   pull_request:
     paths:
       - 'app/**'
@@ -16,18 +18,16 @@ defaults:
   run:
     working-directory: app
 
-# Force every JavaScript action to run on Node.js 24 even if its
-# manifest still declares "node20" (actions/upload-artifact@v5 is
-# the current culprit — its v5 line ships Node 20 internally even
-# though we're on the @v5 tag). Once GitHub flips Node 24 to the
-# default in June 2026, this env var becomes a no-op and can be
-# dropped.
 env:
+  # Force every JavaScript action to run on Node.js 24 even if its
+  # manifest still declares "node20" (actions/upload-artifact@v5 is
+  # the current culprit). Drops a no-op once Node 24 becomes the
+  # GHA default in June 2026.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ─────────────────────────────────────────────────────────────
-  # Lint + analyze on the cheapest runner.
+  # Lint + analyze.
   # ─────────────────────────────────────────────────────────────
   analyze:
     name: Analyze (ubuntu)
@@ -109,20 +109,15 @@ jobs:
            via mTLS over the WireGuard tunnel.
           EOF
           dpkg-deb --build "$STAGE" "icd360svpn-${VERSION}-amd64.deb"
-          ls -la *.deb
 
       - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-linux-x64-bundle
-          path: app/build/linux/x64/release/bundle/
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: icd360svpn-linux-x64-deb
-          path: app/icd360svpn-*.deb
+          name: linux
+          path: |
+            app/icd360svpn-*-amd64.deb
 
   build_macos:
-    name: Build macOS (.app + .dmg)
+    name: Build macOS (.dmg)
     runs-on: macos-latest
     needs: analyze
     steps:
@@ -146,11 +141,6 @@ jobs:
           brew install create-dmg
           VERSION="${{ steps.ver.outputs.version }}"
           APP="build/macos/Build/Products/Release/icd360svpn.app"
-          if [ ! -d "$APP" ]; then
-            echo "expected $APP but it does not exist:"
-            ls -R build/macos/Build/Products/Release/
-            exit 1
-          fi
           create-dmg \
             --volname "ICD360S VPN $VERSION" \
             --window-pos 200 120 \
@@ -162,20 +152,14 @@ jobs:
             --no-internet-enable \
             "icd360svpn-${VERSION}.dmg" \
             "$APP"
-          ls -la *.dmg
 
       - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-macos-app
-          path: app/build/macos/Build/Products/Release/icd360svpn.app/
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: icd360svpn-macos-dmg
+          name: macos
           path: app/icd360svpn-*.dmg
 
   build_windows:
-    name: Build Windows (.exe bundle)
+    name: Build Windows (.zip)
     runs-on: windows-latest
     needs: analyze
     steps:
@@ -186,16 +170,29 @@ jobs:
       - run: flutter create --platforms=windows --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
       - run: flutter build windows --release
+
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          v=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([^+]+).*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Package .zip
+        shell: pwsh
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          Compress-Archive `
+            -Path build/windows/x64/runner/Release/* `
+            -DestinationPath "icd360svpn-$version-windows-x64.zip"
+
       - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-windows-x64
-          path: app/build/windows/x64/runner/Release/
+          name: windows
+          path: app/icd360svpn-*-windows-x64.zip
 
-  # ─────────────────────────────────────────────────────────────
-  # Mobile builds.
-  # ─────────────────────────────────────────────────────────────
   build_android:
-    name: Build Android (APK universal + APK split + AAB)
+    name: Build Android (APK + AAB)
     runs-on: ubuntu-latest
     needs: analyze
     steps:
@@ -210,11 +207,12 @@ jobs:
       - run: flutter create --platforms=android --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
 
-      # Universal APK — same artifact works on Google Play (sideload),
-      # F-Droid (they build from source themselves), Huawei AppGallery,
-      # Samsung Galaxy Store, and direct sideload. The app uses no
-      # Google Play Services / Firebase / proprietary deps so the
-      # binary is identical for every store.
+      # The app uses zero proprietary Google services so the same
+      # universal APK works for sideload, Huawei AppGallery, Samsung
+      # Galaxy Store, and Google Play (sideload). The AAB is what
+      # Google Play Console wants for in-store distribution. F-Droid
+      # builds from source on their own infra; we don't ship a binary
+      # for them.
       - run: flutter build apk --release
       - run: flutter build apk --release --split-per-abi
       - run: flutter build appbundle --release
@@ -239,11 +237,10 @@ jobs:
           done
           cp build/app/outputs/bundle/release/app-release.aab \
              "android-out/icd360svpn-${V}.aab"
-          ls -la android-out/
 
       - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-android
+          name: android
           path: app/android-out/
 
   build_ios:
@@ -257,13 +254,203 @@ jobs:
           channel: stable
       - run: flutter create --platforms=ios --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
-      # iOS DOES support --no-codesign (unlike macOS). Without an
-      # Apple Developer cert + provisioning profile this only
-      # produces a runnable .app for the simulator, not an .ipa
-      # uploadable to App Store Connect — that lands in M8.
       - run: flutter build ios --release --no-codesign
-
       - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-ios-runner
+          name: ios
           path: app/build/ios/iphoneos/Runner.app/
+
+  # ─────────────────────────────────────────────────────────────
+  # Release job: only runs on tag pushes (`v1.2.3`). Downloads
+  # every artifact from the build matrix, computes SHA256 sums,
+  # writes the version.json manifest, and:
+  #   1. Uploads everything to GitHub Releases.
+  #   2. Pushes everything to nginx on vpn.icd360s.de via SSH if
+  #      the VPN_DEPLOY_SSH_KEY secret is set.
+  # ─────────────────────────────────────────────────────────────
+  release:
+    name: Release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build_linux
+      - build_macos
+      - build_windows
+      - build_android
+      - build_ios
+    permissions:
+      contents: write   # for softprops/action-gh-release
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Read version from pubspec
+        id: ver
+        run: |
+          v=$(grep '^version:' app/pubspec.yaml | sed -E 's/version: *([^+]+)\+([0-9]+).*/\1/')
+          b=$(grep '^version:' app/pubspec.yaml | sed -E 's/version: *([^+]+)\+([0-9]+).*/\2/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "build=$b" >> "$GITHUB_OUTPUT"
+          tag="${GITHUB_REF#refs/tags/}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ "v$v" != "$tag" ]; then
+            echo "::warning::tag $tag does not match pubspec version v$v"
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+
+      - name: Layout files for upload + manifest
+        id: layout
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -e
+          V="${{ steps.ver.outputs.version }}"
+          mkdir -p out/download/vpn-management_icd360sev/{linux,macos,windows,android,ios}
+
+          # linux
+          if ls dist/linux/*.deb >/dev/null 2>&1; then
+            cp dist/linux/*.deb out/download/vpn-management_icd360sev/linux/
+          fi
+          # macos
+          if ls dist/macos/*.dmg >/dev/null 2>&1; then
+            cp dist/macos/*.dmg out/download/vpn-management_icd360sev/macos/
+          fi
+          # windows
+          if ls dist/windows/*.zip >/dev/null 2>&1; then
+            cp dist/windows/*.zip out/download/vpn-management_icd360sev/windows/
+          fi
+          # android — copy the entire android-out tree
+          if [ -d dist/android ]; then
+            cp dist/android/* out/download/vpn-management_icd360sev/android/
+          fi
+          # ios — pack the .app as a tarball since GitHub Releases
+          # cannot host directories
+          if [ -d dist/ios ]; then
+            tar -C dist/ios -czf out/download/vpn-management_icd360sev/ios/icd360svpn-${V}-ios-unsigned.tar.gz Runner.app
+          fi
+
+          echo "release_dir=$(pwd)/out" >> "$GITHUB_OUTPUT"
+          find out -type f | sort
+
+      - name: Compute SHA256 sums
+        working-directory: ${{ github.workspace }}/out
+        run: |
+          find download -type f -exec sha256sum {} \; > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Generate version.json
+        id: manifest
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -e
+          V="${{ steps.ver.outputs.version }}"
+          B="${{ steps.ver.outputs.build }}"
+          mkdir -p out/updates
+
+          # Pluck the first file in each platform dir + its sha256.
+          first_in() {
+            local dir="$1"
+            ls "out/download/vpn-management_icd360sev/$dir" 2>/dev/null | head -1 || true
+          }
+          sha_for() {
+            local file="$1"
+            sha256sum "$file" | awk '{print $1}'
+          }
+
+          json_field() {
+            local platform="$1"
+            local fname
+            fname=$(first_in "$platform")
+            if [ -z "$fname" ]; then
+              echo "null"
+              return
+            fi
+            local sha
+            sha=$(sha_for "out/download/vpn-management_icd360sev/$platform/$fname")
+            printf '{"url": "https://vpn.icd360s.de/download/vpn-management_icd360sev/%s/%s", "sha256": "%s"}' "$platform" "$fname" "$sha"
+          }
+
+          # Pull the unreleased changelog bullets out of CHANGELOG.md
+          # for the matching version section. Falls back to a single
+          # generic line if nothing matches.
+          changelog_lines() {
+            awk -v ver="$V" '
+              $0 ~ "^## \\[" ver "\\]" { capture=1; next }
+              capture && /^## \[/ { exit }
+              capture && /^- / {
+                gsub(/^- /, "")
+                gsub(/"/, "\\\"")
+                printf "%s\"%s\"", (n++ ? "," : ""), $0
+              }
+            ' CHANGELOG.md
+          }
+
+          changelog=$(changelog_lines)
+          if [ -z "$changelog" ]; then
+            changelog="\"Release $V\""
+          fi
+
+          released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          {
+            echo "{"
+            echo "  \"version\": \"$V\","
+            echo "  \"build\": $B,"
+            echo "  \"released_at\": \"$released_at\","
+            echo "  \"platforms\": {"
+            echo "    \"linux\":   $(json_field linux),"
+            echo "    \"macos\":   $(json_field macos),"
+            echo "    \"windows\": $(json_field windows),"
+            echo "    \"android\": $(json_field android),"
+            echo "    \"ios\":     $(json_field ios)"
+            echo "  },"
+            echo "  \"changelog\": [$changelog]"
+            echo "}"
+          } > out/updates/version.json
+          cat out/updates/version.json
+          # Validate JSON
+          python3 -c 'import json, sys; json.load(open("out/updates/version.json"))'
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            out/download/vpn-management_icd360sev/linux/*
+            out/download/vpn-management_icd360sev/macos/*
+            out/download/vpn-management_icd360sev/windows/*
+            out/download/vpn-management_icd360sev/android/*
+            out/download/vpn-management_icd360sev/ios/*
+            out/updates/version.json
+            out/SHA256SUMS.txt
+
+      - name: Deploy to vpn.icd360s.de via SSH (if secret present)
+        if: env.VPN_DEPLOY_SSH_KEY != ''
+        env:
+          VPN_DEPLOY_SSH_KEY: ${{ secrets.VPN_DEPLOY_SSH_KEY }}
+          VPN_DEPLOY_SSH_PORT: ${{ secrets.VPN_DEPLOY_SSH_PORT }}
+          VPN_DEPLOY_SSH_USER: ${{ secrets.VPN_DEPLOY_SSH_USER }}
+          VPN_DEPLOY_SSH_HOST: ${{ secrets.VPN_DEPLOY_SSH_HOST }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$VPN_DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -p "${VPN_DEPLOY_SSH_PORT:-36000}" -t ed25519 \
+              "${VPN_DEPLOY_SSH_HOST:-vpn.icd360s.de}" >> ~/.ssh/known_hosts 2>/dev/null
+
+          PORT="${VPN_DEPLOY_SSH_PORT:-36000}"
+          USER="${VPN_DEPLOY_SSH_USER:-icd360sev}"
+          HOST="${VPN_DEPLOY_SSH_HOST:-vpn.icd360s.de}"
+
+          # rsync the entire output tree. The remote shell is
+          # restricted to /var/www/html/{download,updates} via rrsync
+          # in authorized_keys (see deployment runbook).
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy -p $PORT -o StrictHostKeyChecking=accept-new" \
+            ${{ github.workspace }}/out/ \
+            "$USER@$HOST:/"

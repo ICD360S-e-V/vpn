@@ -24,10 +24,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/update_info.dart';
 
-/// URL of the version manifest. Centralised here so it's easy to
-/// switch to vpn.icd360s.de in a future release.
+/// URL of the version manifest. Served by nginx on vpn.icd360s.de
+/// (the same server that runs vpn-agent + AdGuard Home, hosted in
+/// Azure West Europe). HTTP-only — the OS root store validates the
+/// Let's Encrypt cert. mTLS is NOT used here because the update
+/// check must work BEFORE the user enrolls into the WireGuard tunnel.
 const String kUpdateManifestUrl =
-    'https://mail.icd360s.de/downloads/vpn-admin/version.json';
+    'https://vpn.icd360s.de/updates/version.json';
 
 /// Polled at app startup and every 24h thereafter.
 const Duration kUpdateCheckInterval = Duration(hours: 24);
