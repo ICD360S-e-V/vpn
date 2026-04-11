@@ -26,7 +26,7 @@ verbatim from the manual era.
   `app/README.md`, and `docs/architecture.md`. The first three
   duplicated/leaked operational details (SSH command line, key
   paths, AdGuard credential examples) and the architecture doc
-  documented the AdGuard `admin:admin` default. All sensitive
+  documented default credentials inline. All sensitive
   operational content was moved to `/root/CLAUDE.md` on
   vpn.icd360s.de itself, which is excluded from git via the
   new `.gitignore` rule `CLAUDE.md` / `**/CLAUDE.md`.
