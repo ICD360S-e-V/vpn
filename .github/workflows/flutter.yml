@@ -137,29 +137,61 @@ jobs:
           channel: stable
       - uses: ./.github/actions/set-build-number
       - run: flutter create --platforms=macos --project-name icd360svpn --org de.icd360s .
-      - name: Patch macOS entitlements with network.client
-        # Flutter's default macOS Release.entitlements only contains
-        # `com.apple.security.app-sandbox` — NO `network.client`.
+      - name: Overwrite macOS entitlements with network.client
+        # Flutter's default macos/Runner/Release.entitlements contains
+        # ONLY `com.apple.security.app-sandbox`. No `network.client`.
         # That means a sandboxed macOS Flutter app cannot make ANY
-        # outbound network call: Dio's dart:io HttpClient gets
+        # outbound network call: dart:io HttpClient gets
         # `Failed host lookup: <host>` because the sandbox blocks
-        # the resolver. We MUST add the entitlement explicitly,
-        # otherwise enroll, auto-update, and changelog all silently
-        # fail with DNS errors.
+        # the resolver before DNS even runs. We MUST add the
+        # entitlement, otherwise enroll, auto-update, and changelog
+        # all silently fail with DNS errors.
         #
-        # We patch BOTH Release.entitlements and DebugProfile.entitlements
-        # so `flutter run` from a contributor's machine matches the
-        # CI release behavior. plutil is preinstalled on macos-latest;
-        # `-insert` is idempotent under `|| true` since it only errors
-        # when the key already exists.
+        # The earlier (v1.2.1) attempt used `plutil -insert ... -bool YES`
+        # which the macos-latest plutil rejected with "Value YES not
+        # valid for key path", and the `|| echo` fallback swallowed
+        # the error so we shipped a broken DMG anyway. The bulletproof
+        # fix is to just overwrite the file with a known-good plist
+        # via heredoc — we control the full content, no plutil
+        # quirks, no shell escaping.
         run: |
           set -e
-          for f in macos/Runner/Release.entitlements macos/Runner/DebugProfile.entitlements; do
-            echo "patching $f"
-            plutil -insert "com.apple.security.network.client" -bool YES "$f" 2>/dev/null || \
-              echo "  network.client already present"
-            plutil -p "$f"
-          done
+          cat > macos/Runner/Release.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>com.apple.security.app-sandbox</key>
+          	<true/>
+          	<key>com.apple.security.network.client</key>
+          	<true/>
+          </dict>
+          </plist>
+          PLIST
+          cat > macos/Runner/DebugProfile.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>com.apple.security.app-sandbox</key>
+          	<true/>
+          	<key>com.apple.security.cs.allow-jit</key>
+          	<true/>
+          	<key>com.apple.security.network.server</key>
+          	<true/>
+          	<key>com.apple.security.network.client</key>
+          	<true/>
+          </dict>
+          </plist>
+          PLIST
+          echo "--- Release.entitlements ---"
+          cat macos/Runner/Release.entitlements
+          echo "--- DebugProfile.entitlements ---"
+          cat macos/Runner/DebugProfile.entitlements
+          # Hard fail if for some reason the keys are missing
+          grep -q 'com.apple.security.network.client' macos/Runner/Release.entitlements
+          grep -q 'com.apple.security.network.client' macos/Runner/DebugProfile.entitlements
+          echo "::notice::macOS entitlements include network.client"
       - run: flutter pub get
       - run: flutter build macos --release
 

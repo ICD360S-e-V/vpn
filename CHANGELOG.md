@@ -19,6 +19,23 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.2] - 2026-04-11
+
+### Fixed — actually-working macOS network.client entitlement
+- The v1.2.1 attempt to add `com.apple.security.network.client` via
+  `plutil -insert ... -bool YES` was rejected by macos-latest's
+  plutil ("Value YES not valid for key path"), and the
+  `|| echo "  network.client already present"` fallback masked the
+  failure. The v1.2.1 DMG shipped with the same broken entitlements
+  as v1.2.0 — the user got the EXACT same `Failed host lookup`
+  error and reported it 30 seconds after install.
+- Bulletproof fix: drop plutil entirely and overwrite both
+  `Release.entitlements` and `DebugProfile.entitlements` with a
+  known-good plist via `cat > ... <<'PLIST' ... PLIST` heredoc.
+  We now control the full file content; no plutil quirks, no
+  silent failures. The CI step also `grep`s the resulting files
+  to hard-fail the build if `network.client` is somehow missing.
+
 ## [1.2.1] - 2026-04-11
 
 ### Fixed — macOS network sandbox blocked all outbound HTTPS
@@ -259,6 +276,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
+[1.2.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/ICD360S-e-V/vpn/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.2...v1.1.0
