@@ -1,15 +1,14 @@
 name: Flutter app build
 
 on:
+  # M7.6: build ONLY on version tags + PRs. Pushing to main no longer
+  # runs the 6-job matrix because every meaningful release is gated
+  # by an explicit tag (manual today, release-please tomorrow), so
+  # the smoke build on main was duplicating work for nothing —
+  # 10+ minutes of CI per push to no end. PRs still get a smoke
+  # build as the safety net before merge.
   push:
-    branches: [main]
     tags: ['v*']
-    # Whitelist app/ + this exact workflow file. Avoids re-running
-    # the whole 6-job build matrix when only the agent code,
-    # docs, or the agent CI workflow change.
-    paths:
-      - 'app/**'
-      - '.github/workflows/flutter.yml'
   pull_request:
     paths:
       - 'app/**'
