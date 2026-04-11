@@ -44,6 +44,14 @@ permissions:
   contents: write
   pull-requests: write
 
+# googleapis/release-please-action@v4 still ships Node.js 20 internals
+# (same issue we hit with softprops/action-gh-release earlier). Opt
+# into Node.js 24 now via the documented workflow env var so the
+# deprecation warning is silenced and we are pre-emptively ready for
+# the June 2026 cutover.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   release-please:
     name: Open / merge release PR

@@ -205,9 +205,7 @@ class ChangelogService {
       // its own bullet under a synthetic "Notes" subsection so the
       // user-facing viewer doesn't drop release narrative paragraphs
       // (the v1.0.1 entry has these).
-      if (curSectionTitle == null) {
-        curSectionTitle = 'Notes';
-      }
+      curSectionTitle ??= 'Notes';
       flushBullet();
       curBullets.add(_stripMarkdown(line.trim()));
     }
