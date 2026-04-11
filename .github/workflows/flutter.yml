@@ -441,13 +441,23 @@ jobs:
           python3 -c 'import json, sys; json.load(open("out/updates/version.json"))'
 
       - name: Create / update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.ver.outputs.tag }}
-          name: ${{ steps.ver.outputs.tag }}
-          generate_release_notes: true
-          fail_on_unmatched_files: false
-          files: |
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Native gh CLI replaces softprops/action-gh-release@v2 — that
+        # action's master is still on Node.js 20 as of April 2026 and
+        # the maintainer has not bumped it. gh CLI is pre-installed on
+        # every GitHub runner and uses no JavaScript runtime, so the
+        # Node 20 deprecation annotation goes away entirely.
+        #
+        # Idempotency: if a previous workflow run created the release
+        # (unlikely but possible on a re-run), `gh release create`
+        # exits non-zero and we fall back to `gh release upload
+        # --clobber` to refresh the assets in place.
+        run: |
+          set -e
+          TAG="${{ steps.ver.outputs.tag }}"
+
+          ASSETS=(
             out/download/vpn-management_icd360sev/linux/*
             out/download/vpn-management_icd360sev/macos/*
             out/download/vpn-management_icd360sev/windows/*
@@ -455,6 +465,18 @@ jobs:
             out/download/vpn-management_icd360sev/ios/*
             out/updates/version.json
             out/SHA256SUMS.txt
+          )
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::release $TAG already exists, refreshing assets"
+            gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY" "${ASSETS[@]}"
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --generate-notes \
+              "${ASSETS[@]}"
+          fi
 
       - name: Deploy to vpn.icd360s.de via SSH (if secret present)
         if: env.VPN_DEPLOY_SSH_KEY != ''

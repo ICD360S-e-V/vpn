@@ -10,6 +10,18 @@ short and user-facing.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-04-11
+
+### Fixed
+- Last remaining Node.js 20 deprecation warning. The
+  `softprops/action-gh-release@v2` action's master branch was still
+  on Node.js 20 as of April 2026 and the maintainer had not bumped
+  it. Replaced with native `gh release create` / `gh release upload`
+  CLI commands — gh CLI is pre-installed on every GitHub runner and
+  uses no JavaScript runtime at all. Side benefit: idempotent, so
+  re-running a release workflow refreshes the assets via
+  `gh release upload --clobber` instead of failing.
+
 ## [1.0.1] - 2026-04-11
 
 First successfully-published release of icd360svpn. (The earlier
