@@ -86,7 +86,7 @@ class MacosUpdater {
     }
     // Sanity check: we need to be able to write the parent dir.
     final parent = Directory(appBundle).parent.path;
-    final probe = File('$parent/.icd360svpn-update-probe-${pid}');
+    final probe = File('$parent/.icd360svpn-update-probe-$pid');
     try {
       await probe.writeAsString('test');
       await probe.delete();
@@ -174,7 +174,7 @@ class MacosUpdater {
   /// the source tree).
   static String? _findRunningAppBundle() {
     final exe = Platform.resolvedExecutable;
-    final marker = '.app/Contents/MacOS/';
+    const marker = '.app/Contents/MacOS/';
     final i = exe.indexOf(marker);
     if (i < 0) return null;
     return exe.substring(0, i + 4); // include `.app`
