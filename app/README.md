@@ -118,8 +118,11 @@ flutter pub get
 flutter run -d macos
 ```
 
-Or just `flutter build macos --no-codesign`. Linux/Windows builds
-work with the analogous commands.
+Or just `flutter build macos`. Linux/Windows builds work with the
+analogous commands. macOS code signing is controlled by the Xcode
+project — there is no `--no-codesign` flag for `build macos` (only
+`build ios` and `build ipa` accept it). The CI runner produces an
+unsigned `.app` because no developer identity is installed.
 
 ## CI
 
@@ -130,7 +133,7 @@ touches `app/`:
 |---|---|---|
 | `analyze` | ubuntu-latest | `flutter analyze` (and `flutter test` if any tests exist) |
 | `build_linux` | ubuntu-latest | install gtk + libsecret deps, then `flutter build linux --release` |
-| `build_macos` | macos-latest | `flutter build macos --release --no-codesign` |
+| `build_macos` | macos-latest | `flutter build macos --release` (unsigned) |
 | `build_windows` | windows-latest | `flutter build windows --release` |
 
 Each build job uploads the resulting bundle as a workflow artifact.
