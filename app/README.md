@@ -9,14 +9,30 @@ the WireGuard tunnel itself.
 > GitHub Actions on `macos-latest`, `ubuntu-latest`, and
 > `windows-latest`. See `.github/workflows/flutter.yml`.
 
-## Targets
+## Targets (M5.4)
 
-| Platform | Status | Build runner |
-|---|---|---|
-| **macOS** | primary | `macos-latest` |
-| Linux desktop | secondary | `ubuntu-latest` |
-| Windows | tertiary | `windows-latest` |
-| iOS / Android | not yet | — |
+| Platform | Format | Distribution channel | CI runner |
+|---|---|---|---|
+| **macOS** | `.app` + **`.dmg`** (drag-to-Applications) | direct download / auto-update | `macos-latest` |
+| Linux desktop | `.deb` (amd64) + tarball bundle | direct download | `ubuntu-latest` |
+| Windows | `.exe` + DLLs (zipped) | direct download | `windows-latest` |
+| Android — universal APK | `.apk` (fat, all ABIs) | sideload / **Huawei AppGallery / Samsung Galaxy Store** / direct | `ubuntu-latest` |
+| Android — split APK | 3× `.apk` (armeabi-v7a, arm64-v8a, x86_64) | smaller per-device download | `ubuntu-latest` |
+| Android — App Bundle | `.aab` | **Google Play Console** | `ubuntu-latest` |
+| Android — F-Droid | (built from source by F-Droid) | **F-Droid repository** | their CI |
+| iOS | `Runner.app` (unsigned) | testing only — App Store needs M8 (signing + notarisation) | `macos-latest` |
+
+> **Why one APK works on Google Play, Huawei, and Samsung simultaneously:**
+> the app uses **zero proprietary Google services** (no Firebase, no
+> Maps SDK, no Play Services). The same APK binary runs unchanged on
+> every Android device, regardless of which store delivered it.
+> Different stores want different *metadata* and *signing keys*, not
+> different builds.
+>
+> **F-Droid is special** — they only accept apps built from source on
+> their own infrastructure, with reproducibility guarantees. We
+> publish the source repo and add a [`metadata/`](https://f-droid.org/docs/Build_Metadata_Reference/)
+> entry; their CI builds. We don't publish a pre-built APK to F-Droid.
 
 ## Stack
 
@@ -126,18 +142,28 @@ unsigned `.app` because no developer identity is installed.
 
 ## CI
 
-`.github/workflows/flutter.yml` runs four jobs on every push that
-touches `app/`:
+`.github/workflows/flutter.yml` runs the following jobs on every
+push that touches `app/`:
 
-| Job | Runner | Steps |
+| Job | Runner | Output artifact(s) |
 |---|---|---|
-| `analyze` | ubuntu-latest | `flutter analyze` (and `flutter test` if any tests exist) |
-| `build_linux` | ubuntu-latest | install gtk + libsecret deps, then `flutter build linux --release` |
-| `build_macos` | macos-latest | `flutter build macos --release` (unsigned) |
-| `build_windows` | windows-latest | `flutter build windows --release` |
+| `analyze` | ubuntu-latest | (lint only) |
+| `build_linux` | ubuntu-latest | `icd360svpn-linux-x64-bundle/`, `icd360svpn-linux-x64-deb/icd360svpn-X.Y.Z-amd64.deb` |
+| `build_macos` | macos-latest | `icd360svpn-macos-app/icd360svpn.app/`, `icd360svpn-macos-dmg/icd360svpn-X.Y.Z.dmg` |
+| `build_windows` | windows-latest | `icd360svpn-windows-x64/` (Release tree) |
+| `build_android` | ubuntu-latest | `icd360svpn-android/` containing `…-universal.apk`, `…-arm64-v8a.apk`, `…-armeabi-v7a.apk`, `…-x86_64.apk`, `….aab` |
+| `build_ios` | macos-latest | `icd360svpn-ios-runner/Runner.app/` (unsigned, sim-only) |
 
-Each build job uploads the resulting bundle as a workflow artifact.
-There is no flutter SDK on the alma server: we never compile here.
+Every job depends on `analyze` so the build matrix only runs on
+green code. Artifacts are downloaded from each run via the GitHub
+Actions UI or `gh run download <run-id>`.
+
+There is no Flutter SDK on the alma server: **we never compile
+here**. CI is the build farm.
+
+All `actions/checkout` and `actions/upload-artifact` steps are
+pinned to **v5** so they ship Node.js 24 and avoid the Sept 2026
+Node.js 20 deprecation.
 
 ## Known limitations (M5 first cut)
 

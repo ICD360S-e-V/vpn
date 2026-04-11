@@ -16,12 +16,18 @@ defaults:
   run:
     working-directory: app
 
+# All actions/* updated to versions that ship Node.js 24, removing
+# the M5.3 deprecation warnings about Node.js 20.
+
 jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Lint + analyze on the cheapest runner.
+  # ─────────────────────────────────────────────────────────────
   analyze:
     name: Analyze (ubuntu)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -32,64 +38,226 @@ jobs:
       - run: flutter test --no-pub --reporter=expanded
         if: hashFiles('test/**/*.dart') != ''
 
+  # ─────────────────────────────────────────────────────────────
+  # Desktop builds.
+  # ─────────────────────────────────────────────────────────────
   build_linux:
-    name: Build (linux)
+    name: Build Linux (deb + bundle)
     runs-on: ubuntu-latest
     needs: analyze
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Linux build deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev
+            libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev \
+            dpkg-dev
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
       - run: flutter create --platforms=linux --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
       - run: flutter build linux --release
-      - uses: actions/upload-artifact@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          v=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([^+]+).*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Package .deb
+        run: |
+          set -e
+          VERSION="${{ steps.ver.outputs.version }}"
+          STAGE=deb-pkg
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/usr/lib/icd360svpn" "$STAGE/usr/bin" "$STAGE/DEBIAN" \
+                   "$STAGE/usr/share/applications"
+          cp -r build/linux/x64/release/bundle/* "$STAGE/usr/lib/icd360svpn/"
+          cat > "$STAGE/usr/bin/icd360svpn" <<'EOF'
+          #!/bin/sh
+          exec /usr/lib/icd360svpn/icd360svpn "$@"
+          EOF
+          chmod +x "$STAGE/usr/bin/icd360svpn"
+          cat > "$STAGE/usr/share/applications/icd360svpn.desktop" <<EOF
+          [Desktop Entry]
+          Name=ICD360S VPN
+          Comment=Admin app for the ICD360S WireGuard VPN
+          Exec=icd360svpn
+          Type=Application
+          Categories=Network;Utility;
+          StartupNotify=true
+          EOF
+          cat > "$STAGE/DEBIAN/control" <<EOF
+          Package: icd360svpn
+          Version: $VERSION
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Depends: libgtk-3-0, libsecret-1-0
+          Maintainer: ICD360S e.V. <github@icd360s.de>
+          Description: ICD360S WireGuard VPN admin app (Flutter)
+           Native desktop client for managing the ICD360S VPN server
+           via mTLS over the WireGuard tunnel.
+          EOF
+          dpkg-deb --build "$STAGE" "icd360svpn-${VERSION}-amd64.deb"
+          ls -la *.deb
+
+      - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-linux-x64
+          name: icd360svpn-linux-x64-bundle
           path: app/build/linux/x64/release/bundle/
 
+      - uses: actions/upload-artifact@v5
+        with:
+          name: icd360svpn-linux-x64-deb
+          path: app/icd360svpn-*.deb
+
   build_macos:
-    name: Build (macos)
+    name: Build macOS (.app + .dmg)
     runs-on: macos-latest
     needs: analyze
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
       - run: flutter create --platforms=macos --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
-      # Note: `flutter build macos` does NOT accept --no-codesign
-      # (that flag exists only for `build ios` / `build ipa`). On a
-      # vanilla macos-latest runner there is no developer identity
-      # installed, so xcodebuild produces an unsigned .app and the
-      # build succeeds. Notarisation will land in M8.
       - run: flutter build macos --release
-      - uses: actions/upload-artifact@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          v=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([^+]+).*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Package .dmg
+        run: |
+          set -e
+          brew install create-dmg
+          VERSION="${{ steps.ver.outputs.version }}"
+          APP="build/macos/Build/Products/Release/icd360svpn.app"
+          if [ ! -d "$APP" ]; then
+            echo "expected $APP but it does not exist:"
+            ls -R build/macos/Build/Products/Release/
+            exit 1
+          fi
+          create-dmg \
+            --volname "ICD360S VPN $VERSION" \
+            --window-pos 200 120 \
+            --window-size 600 320 \
+            --icon-size 96 \
+            --icon "icd360svpn.app" 160 130 \
+            --hide-extension "icd360svpn.app" \
+            --app-drop-link 440 130 \
+            --no-internet-enable \
+            "icd360svpn-${VERSION}.dmg" \
+            "$APP"
+          ls -la *.dmg
+
+      - uses: actions/upload-artifact@v5
         with:
-          name: icd360svpn-macos
+          name: icd360svpn-macos-app
           path: app/build/macos/Build/Products/Release/icd360svpn.app/
 
+      - uses: actions/upload-artifact@v5
+        with:
+          name: icd360svpn-macos-dmg
+          path: app/icd360svpn-*.dmg
+
   build_windows:
-    name: Build (windows)
+    name: Build Windows (.exe bundle)
     runs-on: windows-latest
     needs: analyze
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
       - run: flutter create --platforms=windows --project-name icd360svpn --org de.icd360s .
       - run: flutter pub get
       - run: flutter build windows --release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: icd360svpn-windows-x64
           path: app/build/windows/x64/runner/Release/
+
+  # ─────────────────────────────────────────────────────────────
+  # Mobile builds.
+  # ─────────────────────────────────────────────────────────────
+  build_android:
+    name: Build Android (APK universal + APK split + AAB)
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --platforms=android --project-name icd360svpn --org de.icd360s .
+      - run: flutter pub get
+
+      # Universal APK — same artifact works on Google Play (sideload),
+      # F-Droid (they build from source themselves), Huawei AppGallery,
+      # Samsung Galaxy Store, and direct sideload. The app uses no
+      # Google Play Services / Firebase / proprietary deps so the
+      # binary is identical for every store.
+      - run: flutter build apk --release
+      - run: flutter build apk --release --split-per-abi
+      - run: flutter build appbundle --release
+
+      - name: Read version
+        id: ver
+        run: |
+          v=$(grep '^version:' pubspec.yaml | sed -E 's/version: *([^+]+).*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Stage artifacts
+        run: |
+          mkdir -p android-out
+          V="${{ steps.ver.outputs.version }}"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "android-out/icd360svpn-${V}-universal.apk"
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            src="build/app/outputs/flutter-apk/app-${abi}-release.apk"
+            if [ -f "$src" ]; then
+              cp "$src" "android-out/icd360svpn-${V}-${abi}.apk"
+            fi
+          done
+          cp build/app/outputs/bundle/release/app-release.aab \
+             "android-out/icd360svpn-${V}.aab"
+          ls -la android-out/
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: icd360svpn-android
+          path: app/android-out/
+
+  build_ios:
+    name: Build iOS (.app, unsigned)
+    runs-on: macos-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --platforms=ios --project-name icd360svpn --org de.icd360s .
+      - run: flutter pub get
+      # iOS DOES support --no-codesign (unlike macOS). Without an
+      # Apple Developer cert + provisioning profile this only
+      # produces a runnable .app for the simulator, not an .ipa
+      # uploadable to App Store Connect — that lands in M8.
+      - run: flutter build ios --release --no-codesign
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: icd360svpn-ios-runner
+          path: app/build/ios/iphoneos/Runner.app/
