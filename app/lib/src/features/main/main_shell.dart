@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/api_client.dart';
-import '../../api/secure_store.dart';
 import '../../api/update_service.dart';
 import '../../api/vpn_tunnel.dart';
 import '../../app.dart';
