@@ -16,7 +16,6 @@ class AppPrefs {
   AppPrefs({Directory? overrideDir}) : _overrideDir = overrideDir;
 
   final Directory? _overrideDir;
-  Directory? _cachedDir;
   Map<String, dynamic> _cache = <String, dynamic>{};
   bool _loaded = false;
 
@@ -28,7 +27,6 @@ class AppPrefs {
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    _cachedDir = dir;
     return File('${dir.path}/$_filename');
   }
 

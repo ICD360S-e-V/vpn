@@ -144,7 +144,7 @@ class ApiClient {
         queryParameters: query,
         options: Options(method: method),
       );
-    } on DioException catch (e) {
+    } on DioException {
       // The agent listens on https://10.8.0.1:8443 which is reachable
       // ONLY through the WireGuard tunnel. If the user hasn't activated
       // the tunnel yet (or it dropped), every request fails with
