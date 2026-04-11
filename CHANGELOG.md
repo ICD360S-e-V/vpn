@@ -19,6 +19,39 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.0] - 2026-04-11
+
+### Added — 4-box enrollment UI + Connect to VPN button (M7.2, M7.4)
+- The first-run screen now asks for the 16-char one-time code in
+  four 4-character boxes (XXXX-XXXX-XXXX-XXXX) instead of a
+  1500-char base64 paste. Auto-uppercase, alphabet filter (32
+  unambiguous symbols, no 0/O/1/I/L matching the agent), auto-
+  advance on the 4th character, backspace at empty position 0
+  jumps back, paste a full 16-char code anywhere and it auto-
+  spreads across all four boxes. Romanian-language UI strings.
+- The app now POSTs the entered code directly to
+  `https://vpn.icd360s.de/enroll` (new `EnrollClient`) and decodes
+  the JSON bundle returned by the agent. The bundle includes the
+  WireGuard peer config alongside the mTLS PEMs (M7.1 wire format
+  v2), and we persist all of it in flutter_secure_storage.
+- New floating-action **Connect to VPN** button on every screen.
+  Pressing it writes the saved WireGuard `.conf` to ~/Documents
+  (Downloads on Android) and asks the OS default handler to open
+  it. On macOS this hands the file to WireGuard.app for one-tap
+  import. No NetworkExtension entitlements, no Apple Developer
+  Program — per the user's explicit constraint.
+
+### Fixed — release-notes spinner that hung forever (M7.5)
+- nginx serves `.md` files as `application/octet-stream` because the
+  default mime.types ships no entry for markdown, and Dio's
+  `ResponseType.plain` decoder stalled on binary content types in
+  some configurations rather than just utf8-decoding regardless.
+  ChangelogService now reads the body as bytes and decodes UTF-8
+  manually + sets `validateStatus: (_) => true` so non-2xx
+  responses raise an explicit Exception path. The matching nginx
+  fix (force `text/plain; charset=utf-8` for `/updates/CHANGELOG.md`)
+  is also deployed on the server.
+
 ## [1.1.0] - 2026-04-11
 
 ### Added — short-code enrollment (M7.1, M7.3)
@@ -193,6 +226,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
+[1.2.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ICD360S-e-V/vpn/releases/tag/v1.0.1
