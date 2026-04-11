@@ -28,7 +28,7 @@ dependencies:
   flutter_riverpod: ^3.0.0
 
   # Bandwidth time-series visualization for /v1/peers/{pubkey}/bandwidth.
-  fl_chart: ^0.70.0
+  fl_chart: ^1.2.0
 
   # WireGuard client config QR rendering for the create-peer flow.
   qr_flutter: ^4.1.0
