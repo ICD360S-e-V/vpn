@@ -63,9 +63,9 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Card(
+          const Card(
             child: Column(
-              children: const <Widget>[
+              children: <Widget>[
                 ListTile(
                   title: Text('About'),
                   subtitle: Text('icd360svpn 0.1.0'),

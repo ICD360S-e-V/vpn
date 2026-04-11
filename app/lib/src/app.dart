@@ -48,21 +48,32 @@ class FatalError extends AppPhase {
 // ---------------------------------------------------------------
 // Providers
 // ---------------------------------------------------------------
+//
+// Riverpod 3.0 API: `StateNotifier` and `StateNotifierProvider` are
+// removed in favour of `Notifier` + `NotifierProvider`. The new
+// Notifier overrides `build()` to return the initial state and reads
+// any dependencies via `ref` instead of constructor injection.
 
 /// Singleton secure-storage wrapper.
-final secureStoreProvider = Provider<SecureStore>((ref) => SecureStore());
+final Provider<SecureStore> secureStoreProvider =
+    Provider<SecureStore>((ref) => SecureStore());
 
-/// The app's lifecycle phase. Driven by AppPhaseController below.
-final appPhaseProvider = StateNotifierProvider<AppPhaseController, AppPhase>(
-  (ref) => AppPhaseController(ref.watch(secureStoreProvider)),
-);
+/// The app's lifecycle phase. Driven by [AppPhaseController].
+final NotifierProvider<AppPhaseController, AppPhase> appPhaseProvider =
+    NotifierProvider<AppPhaseController, AppPhase>(AppPhaseController.new);
 
-class AppPhaseController extends StateNotifier<AppPhase> {
-  AppPhaseController(this._store) : super(const Bootstrapping()) {
-    bootstrap();
+class AppPhaseController extends Notifier<AppPhase> {
+  late SecureStore _store;
+
+  @override
+  AppPhase build() {
+    _store = ref.read(secureStoreProvider);
+    // Kick off the keychain probe asynchronously. The first state
+    // the UI sees is Bootstrapping; once the probe finishes, the
+    // controller flips to NeedsEnrollment or Connected.
+    Future<void>.microtask(bootstrap);
+    return const Bootstrapping();
   }
-
-  final SecureStore _store;
 
   Future<void> bootstrap() async {
     state = const Bootstrapping();

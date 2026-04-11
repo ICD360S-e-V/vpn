@@ -14,16 +14,20 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStore {
+  // Note: AndroidOptions.encryptedSharedPreferences was removed in
+  // flutter_secure_storage v10 — Jetpack Security is deprecated by
+  // Google and the package now migrates to custom ciphers
+  // automatically on first access. We pass plain defaults.
   SecureStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage(
-          aOptions: AndroidOptions(encryptedSharedPreferences: true),
-          mOptions: MacOsOptions(
-            accessibility: KeychainAccessibility.unlocked_this_device,
-          ),
-          iOptions: IOSOptions(
-            accessibility: KeychainAccessibility.unlocked_this_device,
-          ),
-        );
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              mOptions: MacOsOptions(
+                accessibility: KeychainAccessibility.unlocked_this_device,
+              ),
+              iOptions: IOSOptions(
+                accessibility: KeychainAccessibility.unlocked_this_device,
+              ),
+            );
 
   final FlutterSecureStorage _storage;
 

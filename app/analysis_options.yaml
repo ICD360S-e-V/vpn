@@ -3,7 +3,12 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   language:
     strict-casts: true
-    strict-inference: true
+    # strict-inference is too noisy with Riverpod's generic provider
+    # types — every ref.watch() / ref.read() complains about
+    # inference even when the generic is fully resolved by the
+    # provider's declared type. Re-enable in a future milestone with
+    # explicit type annotations everywhere.
+    strict-inference: false
     strict-raw-types: true
   errors:
     invalid_annotation_target: ignore
