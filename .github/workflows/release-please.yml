@@ -1,0 +1,64 @@
+name: Release Please
+
+# Auto-versioning + auto-CHANGELOG, M7.5.
+#
+# How this fits into the existing release pipeline:
+#
+#   1. Every push to main runs this workflow.
+#   2. release-please reads commits since the last tag and decides if
+#      a release is needed (any commit with `feat:` / `fix:` /
+#      `perf:` / `BREAKING CHANGE:`). If so, it opens (or updates)
+#      a PR titled `chore(main): release X.Y.Z` containing:
+#        - the new CHANGELOG.md section with auto-generated bullets
+#          grouped by Conventional Commit type
+#        - the bumped version in version.txt and app/pubspec.yaml
+#          (the `# x-release-please-version` annotation makes
+#          release-please's "generic" updater touch only that one
+#          line in pubspec)
+#        - the bumped manifest entry in .release-please-manifest.json
+#   3. We review/merge the Release PR. release-please then creates
+#      the git tag `vX.Y.Z` and a GitHub Release entry.
+#   4. The tag push fires .github/workflows/flutter.yml AND
+#      .github/workflows/agent.yml on `v*`, which run the existing
+#      build matrix + deploy steps. Build number is derived from the
+#      semver via .github/actions/set-build-number, so the auto-update
+#      mechanism in the app sees a strictly-greater build value.
+#
+# Build-number policy: monotonic from semver, computed in CI as
+# MAJ*10000 + MIN*100 + PAT. The pubspec source-of-truth holds only
+# the semver (no `+N`); the composite action injects `+N` immediately
+# before `flutter build`. This avoids drift between developer local
+# state and CI state.
+#
+# Commit message → bump table:
+#   feat:           → minor (1.0.2 → 1.1.0)
+#   fix: / perf:    → patch (1.0.2 → 1.0.3)
+#   feat!: / BREAKING CHANGE in footer → major
+#   chore: / docs: / ci: / refactor: / style: / test: / build: → no release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Open / merge release PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Show outputs
+        run: |
+          echo "release_created=${{ steps.release.outputs.release_created }}"
+          echo "tag_name=${{ steps.release.outputs.tag_name }}"
+          echo "version=${{ steps.release.outputs.version }}"
+          echo "pr=${{ steps.release.outputs.pr }}"

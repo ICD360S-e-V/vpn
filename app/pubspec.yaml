@@ -1,11 +1,14 @@
 name: icd360svpn
 description: macOS / desktop admin app for the ICD360S WireGuard VPN server.
 publish_to: 'none'
-# version: <semver>+<build-number>
-# Bumped on every release. The build-number is monotonic across all
-# semver versions and is what package_info_plus reads at runtime for
-# auto-update comparison.
-version: 1.0.2+3
+# Source-of-truth: SEMVER ONLY. release-please bumps this line via the
+# `# x-release-please-version` annotation marker. The build number is
+# DERIVED in CI from the semver (MAJ*10000 + MIN*100 + PAT) by the
+# composite action .github/actions/set-build-number, which sed-rewrites
+# this line just before `flutter build` runs in each platform job.
+# Local `flutter run` will use build number 0 (default), which is fine
+# for development — only release builds need the monotonic value.
+version: 1.1.0 # x-release-please-version
 
 environment:
   sdk: '>=3.7.0 <4.0.0'

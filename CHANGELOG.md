@@ -8,7 +8,18 @@ mechanism** as well: the bullets under each version land in the
 "What's new" dialog rendered by `UpdateAvailableDialog`. Keep entries
 short and user-facing.
 
-## [Unreleased]
+**Maintenance policy (M7.5+)**: this file is **auto-generated** by
+[release-please](https://github.com/googleapis/release-please) from
+[Conventional Commit](https://www.conventionalcommits.org) messages.
+Use `feat:` for new features (minor bump), `fix:` for bug fixes
+(patch bump), `feat!:` or a `BREAKING CHANGE:` footer for major
+bumps. `chore:`, `docs:`, `ci:`, `refactor:`, `style:`, `test:`,
+`build:` do not produce a release. Manual editing of new entries
+is discouraged — it will be overwritten the next time release-please
+opens a release PR. Historical sections below v1.1.0 are preserved
+verbatim from the manual era.
+
+## [1.1.0] - 2026-04-11
 
 ### Added — short-code enrollment (M7.1, M7.3)
 - New `vpn-agent issue-code <name>` subcommand prints a 16-char
@@ -51,6 +62,40 @@ short and user-facing.
   restarts `vpn-agent.service`, and removes the drop file.
 - This eliminates "build the Go agent on alma + scp manually"
   from the workflow. End-to-end push → live in ~30 seconds.
+
+### Added — auto-versioning + auto-CHANGELOG (M7.5)
+- New `release-please` pipeline (`release-please-config.json` +
+  `.release-please-manifest.json` + `.github/workflows/release-please.yml`).
+  Every push to main runs release-please which reads commit messages
+  since the last tag, decides on a semver bump (`feat:` → minor,
+  `fix:`/`perf:` → patch, `feat!:` / `BREAKING CHANGE:` footer →
+  major, anything else → no release), and opens a Release PR with
+  the bumped version + auto-generated CHANGELOG entry. Merging the
+  PR creates the `vX.Y.Z` tag which fires the existing `flutter.yml`
+  + `agent.yml` build matrix.
+- New composite action `.github/actions/set-build-number` derives a
+  strictly-monotonic Flutter build number from the semver
+  (`MAJ*10000 + MIN*100 + PAT`) in CI, immediately before
+  `flutter build`. The source `app/pubspec.yaml` now carries only
+  the semver — single source of truth, no manual `+N` bump risk
+  of regressing the auto-update gate.
+- The agent's Go binary continues to use `git describe --tags` so it
+  picks up the same tag automatically — no extra config needed.
+
+### Added — release notes viewer (M7.5)
+- New `ChangelogScreen` reachable by tapping the version label in
+  the footer (every screen) or in Settings → Version. Shows the full
+  per-version release history with each version as an expandable
+  card, the current version highlighted, dates parsed from the
+  CHANGELOG headers, and `Refresh` to reload from the server.
+- New `ChangelogService` fetches `https://vpn.icd360s.de/updates/CHANGELOG.md`
+  (plaintext HTTPS, OS root store — no mTLS, works before enrollment)
+  and parses both manual Keep a Changelog entries AND release-please's
+  auto-generated format (`## [X.Y.Z](url) (date)` with `*` bullets and
+  inline markdown). Inline markdown is stripped to plain text so the
+  renderer doesn't pull in `flutter_markdown` for two screens.
+- Release job now copies `CHANGELOG.md` into `out/updates/` alongside
+  `version.json` so the rsync to nginx publishes both in one step.
 
 ## [1.0.2] - 2026-04-11
 
@@ -148,6 +193,7 @@ release pipeline (M6.5).
 - Initial repo scaffold (M0). README, OpenAPI spec, architecture
   notes, agent + app placeholders.
 
-[Unreleased]: https://github.com/ICD360S-e-V/vpn/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ICD360S-e-V/vpn/releases/tag/v0.1.0
+[1.1.0]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.2...v1.1.0
+[1.0.2]: https://github.com/ICD360S-e-V/vpn/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/ICD360S-e-V/vpn/releases/tag/v1.0.1
 [0.0.1]: https://github.com/ICD360S-e-V/vpn/releases/tag/v0.0.1

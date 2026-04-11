@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../api/update_service.dart';
 import '../../app.dart';
+import '../about/changelog_screen.dart';
 import '../updates/update_available_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -119,7 +120,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: <Widget>[
                 ListTile(
                   title: const Text('Version'),
-                  subtitle: Text('icd360svpn $_version (build $_build)'),
+                  subtitle: Text(
+                    'icd360svpn $_version (build $_build) — '
+                    'tap to see release notes',
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ChangelogScreen(),
+                      ),
+                    );
+                  },
                   trailing: _checkingForUpdate
                       ? const SizedBox(
                           width: 20,
