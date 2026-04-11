@@ -26,6 +26,7 @@ import (
 
 	"github.com/ICD360S-e-V/vpn/agent/internal/api"
 	"github.com/ICD360S-e-V/vpn/agent/internal/mtls"
+	"github.com/ICD360S-e-V/vpn/agent/internal/stats"
 	"github.com/ICD360S-e-V/vpn/agent/internal/wg"
 )
 
@@ -92,6 +93,12 @@ func cmdServe(args []string) {
 		"AdGuard Home basic auth username")
 	adguardPass := fs.String("adguard-pass", "admin",
 		"AdGuard Home basic auth password")
+	statsDB := fs.String("stats-db", "/var/lib/vpn-agent/stats.db",
+		"sqlite database path for bandwidth samples")
+	statsPeriod := fs.Duration("stats-period", 60*time.Second,
+		"how often the sampler reads wgctrl byte counters")
+	statsRetention := fs.Duration("stats-retention", 90*24*time.Hour,
+		"how long to keep raw bandwidth samples before pruning")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -121,6 +128,12 @@ func cmdServe(args []string) {
 		os.Exit(1)
 	}
 
+	statsStore, err := stats.Open(*statsDB)
+	if err != nil {
+		slog.Error("stats store open failed", "err", err)
+		os.Exit(1)
+	}
+
 	srv, err := api.NewServer(api.Config{
 		Listen:      *listenAddr,
 		WGInterface: *wgIface,
@@ -130,6 +143,7 @@ func cmdServe(args []string) {
 		CA:          ca,
 		ServerCert:  serverCert,
 		WG:          wgMgr,
+		Stats:       statsStore,
 		Version:     version,
 		Started:     time.Now(),
 	})
@@ -142,6 +156,16 @@ func cmdServe(args []string) {
 		syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Start the bandwidth sampler in its own goroutine. It shares
+	// the wgctrl client with the Manager so we don't open a second
+	// netlink socket.
+	sampler := stats.NewSampler(wgMgr.Client(), *wgIface, statsStore, *statsPeriod, *statsRetention)
+	go func() {
+		if err := sampler.Run(ctx); err != nil {
+			slog.Error("sampler exited", "err", err)
+		}
+	}()
+
 	slog.Info("vpn-agent starting",
 		"listen", *listenAddr,
 		"version", version,
@@ -150,10 +174,19 @@ func cmdServe(args []string) {
 		"wg_subnet", *wgSubnet,
 		"public_endpoint", *publicEnd,
 		"adguard_url", *adguardURL,
+		"stats_db", *statsDB,
+		"stats_period", *statsPeriod,
+		"stats_retention", *statsRetention,
 	)
 	if err := srv.Run(ctx); err != nil {
 		slog.Error("server exited with error", "err", err)
 		os.Exit(1)
+	}
+	if err := statsStore.Close(); err != nil {
+		slog.Warn("stats store close failed", "err", err)
+	}
+	if err := wgMgr.Close(); err != nil {
+		slog.Warn("wg manager close failed", "err", err)
 	}
 	slog.Info("vpn-agent stopped cleanly")
 }

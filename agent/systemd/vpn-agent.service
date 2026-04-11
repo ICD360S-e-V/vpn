@@ -30,8 +30,18 @@ RestrictRealtime=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged @resources @mount @reboot @swap @raw-io
+# SystemCallFilter is intentionally NOT set in M4.4: modernc.org/sqlite
+# (and the Go runtime it links against) calls some syscall outside the
+# @system-service whitelist on AlmaLinux 9's systemd (255). Without
+# SystemCallErrorNumber=, the kernel kills the process with SIGSYS
+# instead of returning EPERM, and the journal does not say which call
+# was blocked. Until we identify and explicitly allow the offending
+# call, the filter is disabled. CAP_NET_BIND_SERVICE + CAP_NET_ADMIN
+# remain the primary authorisation boundary; ProtectSystem,
+# ProtectKernelModules, NoNewPrivileges, MemoryDenyWriteExecute, and
+# RestrictNamespaces still apply. TODO M5: re-enable with the right
+# whitelist after running with SystemCallErrorNumber=EPERM to identify
+# the missing syscall.
 
 # State directories the agent is allowed to write to.
 # M2: /etc/wireguard is now RW because the agent mutates wg0.conf when

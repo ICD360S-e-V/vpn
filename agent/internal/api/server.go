@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ICD360S-e-V/vpn/agent/internal/mtls"
+	"github.com/ICD360S-e-V/vpn/agent/internal/stats"
 	"github.com/ICD360S-e-V/vpn/agent/internal/wg"
 )
 
@@ -25,6 +26,7 @@ type Config struct {
 	CA          *mtls.CA
 	ServerCert  tls.Certificate
 	WG          *wg.Manager
+	Stats       *stats.Store
 	Version     string
 	Started     time.Time
 }
@@ -50,6 +52,7 @@ func NewServer(cfg Config) (*Server, error) {
 	mux.HandleFunc("POST /v1/peers", h.createPeer)
 	mux.HandleFunc("PATCH /v1/peers/{pubkey}", h.patchPeer)
 	mux.HandleFunc("DELETE /v1/peers/{pubkey}", h.deletePeer)
+	mux.HandleFunc("GET /v1/peers/{pubkey}/bandwidth", h.getPeerBandwidth)
 
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{cfg.ServerCert},

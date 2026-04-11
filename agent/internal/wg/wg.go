@@ -99,6 +99,14 @@ func (m *Manager) Close() error {
 	return err
 }
 
+// Client returns the underlying wgctrl client so other subsystems
+// (e.g. the bandwidth sampler) can read live device state without
+// opening their own netlink socket. Do NOT call Close() on the
+// returned client — the Manager owns it.
+func (m *Manager) Client() *wgctrl.Client {
+	return m.client
+}
+
 // List returns the current peers, joining static config from wg0.conf
 // with live transfer/handshake data from wgctrl.
 func (m *Manager) List(ctx context.Context) ([]Peer, error) {
