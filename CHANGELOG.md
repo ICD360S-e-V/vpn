@@ -10,6 +10,28 @@ short and user-facing.
 
 ## [Unreleased]
 
+### Added — server infrastructure (M6.2 / M6.3)
+- nginx 1.20 + Let's Encrypt cert on vpn.icd360s.de.
+- Public download tree at `https://vpn.icd360s.de/download/vpn-management_icd360sev/<platform>/`.
+- `https://vpn.icd360s.de/updates/version.json` (auto-update manifest).
+- **wstunnel v10.5.2** running on `127.0.0.1:8444` plain WebSocket.
+  nginx terminates TLS at `vpn.icd360s.de:443` and proxies the
+  `/wg-tcp/` location to wstunnel, which forwards UDP to the WG
+  kernel socket. Result: WireGuard now also reaches the server
+  through any firewall that allows HTTPS — hotel WiFi, eduroam,
+  corporate proxy, captive portal — without losing the existing
+  UDP/443 happy path.
+- Restricted `vpn-deploy` user (forced rrsync, no shell, write-only
+  to `/var/www/html`) for the GitHub Actions release pipeline. Four
+  GitHub secrets configured: `VPN_DEPLOY_SSH_{KEY,HOST,PORT,USER}`.
+- Documentation: `docs/vpn-server-setup.md` server runbook.
+
+### Removed
+- Empty 'tunnel.vpn.icd360s.de' SNI-routing plan from the M6 design.
+  Path-based routing in a single nginx vhost turned out to be
+  cleaner — no second cert SAN needed, no DNS A record needed (the
+  one we added at inwx is harmless and stays as a future fallback).
+
 ## [0.1.0] - 2026-04-11
 
 First public release of the Flutter admin app + the M0–M5 server
