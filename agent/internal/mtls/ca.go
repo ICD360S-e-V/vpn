@@ -202,24 +202,21 @@ func (ca *CA) LoadOrIssueServerCert(dir, listenAddr string) (tls.Certificate, er
 	return tls.LoadX509KeyPair(certPath, keyPath)
 }
 
-// IssueClientCert generates a fresh client cert signed by the CA and
-// writes three files into outDir:
+// IssueClientCertPEM generates a fresh client cert signed by the CA
+// and returns the cert PEM, key PEM, and CA PEM as in-memory byte
+// slices. No disk I/O.
 //
-//	<sanitized-name>.pem      The client cert
-//	<sanitized-name>.key      The client private key (mode 0600)
-//	<sanitized-name>-ca.pem   The CA cert (so the client can verify the server)
-func (ca *CA) IssueClientCert(name, outDir string) error {
-	if err := os.MkdirAll(outDir, 0o700); err != nil {
-		return fmt.Errorf("mkdir out: %w", err)
-	}
-
+// Used by `vpn-agent issue-bundle` to package an enrollment payload
+// for the Flutter admin app, and (via IssueClientCert) by the
+// `vpn-agent issue-cert` subcommand which still writes to disk.
+func (ca *CA) IssueClientCertPEM(name string) (certPEM, keyPEM, caPEM []byte, err error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 	serial, err := randSerial()
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 	template := &x509.Certificate{
 		SerialNumber: serial,
@@ -232,23 +229,45 @@ func (ca *CA) IssueClientCert(name, outDir string) error {
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
-	der, err := x509.CreateCertificate(rand.Reader, template, ca.Cert, &key.PublicKey, ca.Key)
+	certDER, err := x509.CreateCertificate(rand.Reader, template, ca.Cert, &key.PublicKey, ca.Key)
 	if err != nil {
-		return fmt.Errorf("create client cert: %w", err)
+		return nil, nil, nil, fmt.Errorf("create client cert: %w", err)
 	}
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 
+	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	caPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.CertDER})
+	return certPEM, keyPEM, caPEM, nil
+}
+
+// IssueClientCert generates a fresh client cert signed by the CA and
+// writes three files into outDir:
+//
+//	<sanitized-name>.pem      The client cert
+//	<sanitized-name>.key      The client private key (mode 0600)
+//	<sanitized-name>-ca.pem   The CA cert (so the client can verify the server)
+//
+// Thin wrapper around IssueClientCertPEM.
+func (ca *CA) IssueClientCert(name, outDir string) error {
+	if err := os.MkdirAll(outDir, 0o700); err != nil {
+		return fmt.Errorf("mkdir out: %w", err)
+	}
+	certPEM, keyPEM, caPEM, err := ca.IssueClientCertPEM(name)
+	if err != nil {
+		return err
+	}
 	base := filepath.Join(outDir, sanitize(name))
-	if err := writePEM(base+".pem", "CERTIFICATE", der, 0o644); err != nil {
+	if err := os.WriteFile(base+".pem", certPEM, 0o644); err != nil {
 		return err
 	}
-	if err := writePEM(base+".key", "EC PRIVATE KEY", keyDER, 0o600); err != nil {
+	if err := os.WriteFile(base+".key", keyPEM, 0o600); err != nil {
 		return err
 	}
-	if err := writePEM(base+"-ca.pem", "CERTIFICATE", ca.CertDER, 0o644); err != nil {
+	if err := os.WriteFile(base+"-ca.pem", caPEM, 0o644); err != nil {
 		return err
 	}
 	return nil

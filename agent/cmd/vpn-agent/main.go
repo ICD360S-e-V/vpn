@@ -8,13 +8,19 @@
 // Subcommands:
 //
 //	vpn-agent serve [flags]              Run the HTTP server
-//	vpn-agent issue-cert <name> [flags]  Issue a client cert (signed by the
-//	                                     local CA) to bootstrap a new admin
+//	vpn-agent issue-cert <name> [flags]  Issue a client cert as 3 PEM files
+//	vpn-agent issue-bundle <name> [flgs] Issue a client cert as a single
+//	                                     base64-gzip-json blob ready to
+//	                                     paste into the admin app
 //	vpn-agent version                    Print version
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -50,6 +56,8 @@ func main() {
 		cmdServe(args)
 	case "issue-cert":
 		cmdIssueCert(args)
+	case "issue-bundle":
+		cmdIssueBundle(args)
 	case "version", "--version", "-v":
 		fmt.Println("vpn-agent", version)
 	case "help", "--help", "-h":
@@ -65,9 +73,12 @@ func usage() {
 	fmt.Fprint(os.Stderr, `vpn-agent — ICD360S VPN management daemon
 
 Usage:
-    vpn-agent serve [flags]               Run the HTTPS API server (mTLS required)
-    vpn-agent issue-cert <name> [flags]   Issue a client cert signed by the local CA
-    vpn-agent version                     Print version
+    vpn-agent serve [flags]                 Run the HTTPS API server (mTLS required)
+    vpn-agent issue-cert   <name> [flags]   Issue a client cert as 3 PEM files
+    vpn-agent issue-bundle <name> [flags]   Issue a client cert as a single
+                                            base64-gzip-json blob ready to paste
+                                            into the admin app's enrollment field
+    vpn-agent version                       Print version
 
 Run "vpn-agent <command> -h" for command-specific flags.
 `)
@@ -222,6 +233,114 @@ func cmdIssueCert(args []string) {
 	}
 	fmt.Printf("Issued client cert for %q in %s\n", name, *outDir)
 	fmt.Printf("Files: %s.pem  %s.key  %s-ca.pem\n", name, name, name)
+}
+
+// enrollmentBundle is the JSON wire format embedded inside the
+// `vpn-agent issue-bundle` output. The `Version` field lets the
+// Flutter admin app refuse incompatible bundles cleanly. Bumped
+// whenever fields are added or removed.
+type enrollmentBundle struct {
+	Version  int       `json:"version"`
+	Name     string    `json:"name"`
+	IssuedAt time.Time `json:"issued_at"`
+	AgentURL string    `json:"agent_url"`
+	CertPEM  string    `json:"cert_pem"`
+	KeyPEM   string    `json:"key_pem"`
+	CAPEM    string    `json:"ca_pem"`
+}
+
+const enrollmentBundleVersion = 1
+
+// cmdIssueBundle handles `vpn-agent issue-bundle <name>`.
+//
+// It generates a fresh client cert + key signed by the local CA,
+// bundles them with the CA cert and the agent URL into a JSON, gzips
+// it, base64-encodes it, and prints the resulting single-line blob to
+// stdout (followed by a newline). The admin pastes that blob into the
+// macOS / Flutter app's enrollment field — one input, no copying
+// three separate PEMs.
+//
+// The output is intentionally a single ASCII-safe line so it survives
+// being copied through SSH terminals, Slack messages, or printed
+// instructions. Standard base64 (not URL-safe) is used because the
+// blob is not embedded in URLs.
+func cmdIssueBundle(args []string) {
+	fs := flag.NewFlagSet("issue-bundle", flag.ExitOnError)
+	certDir := fs.String("cert-dir", "/etc/vpn-agent",
+		"directory containing the CA")
+	agentURL := fs.String("agent-url", "https://10.8.0.1:8443",
+		"URL the admin app should dial — must be reachable through the WireGuard tunnel")
+	wrap := fs.Bool("wrap", false,
+		"wrap the output at 76 columns for human readability (the app accepts both forms)")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	if fs.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "issue-bundle requires a name argument, e.g. 'andrei-laptop'")
+		fmt.Fprintln(os.Stderr, "all flags must appear BEFORE the name")
+		os.Exit(2)
+	}
+	name := fs.Arg(0)
+
+	ca, err := mtls.LoadOrCreateCA(*certDir)
+	if err != nil {
+		slog.Error("CA load failed", "err", err)
+		os.Exit(1)
+	}
+	certPEM, keyPEM, caPEM, err := ca.IssueClientCertPEM(name)
+	if err != nil {
+		slog.Error("issue failed", "err", err)
+		os.Exit(1)
+	}
+
+	bundle := enrollmentBundle{
+		Version:  enrollmentBundleVersion,
+		Name:     name,
+		IssuedAt: time.Now().UTC(),
+		AgentURL: *agentURL,
+		CertPEM:  string(certPEM),
+		KeyPEM:   string(keyPEM),
+		CAPEM:    string(caPEM),
+	}
+	jsonBytes, err := json.Marshal(bundle)
+	if err != nil {
+		slog.Error("marshal bundle", "err", err)
+		os.Exit(1)
+	}
+
+	var gzbuf bytes.Buffer
+	gz := gzip.NewWriter(&gzbuf)
+	if _, err := gz.Write(jsonBytes); err != nil {
+		slog.Error("gzip bundle", "err", err)
+		os.Exit(1)
+	}
+	if err := gz.Close(); err != nil {
+		slog.Error("gzip close", "err", err)
+		os.Exit(1)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(gzbuf.Bytes())
+
+	if *wrap {
+		// Wrap at 76 columns for emails / printed runbooks. The app
+		// strips whitespace before decoding, so both forms work.
+		for i := 0; i < len(encoded); i += 76 {
+			end := i + 76
+			if end > len(encoded) {
+				end = len(encoded)
+			}
+			fmt.Println(encoded[i:end])
+		}
+	} else {
+		fmt.Println(encoded)
+	}
+
+	// Friendly footer on stderr so it does not get captured into a
+	// pipe but is still visible to a human running the command.
+	fmt.Fprintf(os.Stderr,
+		"\n# enrollment bundle for %q (%d bytes raw, %d bytes encoded)\n"+
+			"# paste the line(s) above into the admin app's enrollment field.\n",
+		name, len(jsonBytes), len(encoded))
 }
 
 // refuseIfPublicListen returns nil if addr's host is loopback, link-local,
