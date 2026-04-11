@@ -1,0 +1,54 @@
+[Unit]
+Description=ICD360S VPN management agent
+Documentation=https://github.com/ICD360S-e-V/vpn
+After=network-online.target wg-quick@wg0.service AdGuardHome.service
+Wants=network-online.target
+Requires=wg-quick@wg0.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/vpn-agent serve
+Restart=on-failure
+RestartSec=5
+
+# Hardening — see systemd.exec(5) and systemd-analyze security vpn-agent
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @reboot @swap @raw-io
+
+# State directories the agent is allowed to write to
+ReadWritePaths=/etc/vpn-agent /var/lib/vpn-agent
+# M1: only reads /etc/wireguard. M2 will need RW here for peer mutation.
+ReadOnlyPaths=/etc/wireguard
+
+# Capabilities — keep minimal
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_ADMIN
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+LimitNOFILE=4096
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target
