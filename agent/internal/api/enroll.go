@@ -18,9 +18,15 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ICD360S-e-V/vpn/agent/internal/enroll"
 )
+
+// failureBackoff slows down brute-force attempts after a 4xx response.
+// Bounds an attacker (single connection) at ~4 req/sec regardless of
+// IP rotation. The genuine user only ever waits this once on a typo.
+const failureBackoff = 250 * time.Millisecond
 
 type enrollRequest struct {
 	Code string `json:"code"`
@@ -44,11 +50,14 @@ func (h *handlers) postEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Rate limit by client IP. Behind nginx so check X-Forwarded-For first.
-	ip := callerIPForRateLimit(r)
-	if h.cfg.EnrollLimiter != nil && !h.cfg.EnrollLimiter.Allow(ip) {
+	// Server-wide rate limit (M7.1.1: dropped per-IP keying because
+	// IP-based limits are theatre against an IP-rotating attacker
+	// and unfair to legit users behind carrier-grade NAT). The IP
+	// is still recorded in the audit log via the request middleware
+	// but is no longer used to gate the request.
+	if h.cfg.EnrollLimiter != nil && !h.cfg.EnrollLimiter.Allow("global") {
 		writeError(w, http.StatusTooManyRequests, "rate-limited",
-			"too many enrollment attempts, please try again in a minute")
+			"server-wide enrollment rate limit hit, try again in a minute")
 		return
 	}
 
@@ -56,18 +65,23 @@ func (h *handlers) postEnroll(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
+		time.Sleep(failureBackoff)
 		writeError(w, http.StatusBadRequest, "invalid-json", err.Error())
 		return
 	}
 
 	normalized, err := enroll.Normalize(req.Code)
 	if err != nil {
+		time.Sleep(failureBackoff)
 		writeError(w, http.StatusBadRequest, "invalid-code", err.Error())
 		return
 	}
 
 	bundle, err := h.cfg.EnrollStore.PopValid(normalized)
 	if err != nil {
+		// Slow down a bit. Bounds the brute-force rate well below
+		// what would matter against a 32^16 keyspace anyway.
+		time.Sleep(failureBackoff)
 		if errors.Is(err, enroll.ErrNotFound) {
 			// Don't reveal whether the code was wrong vs expired vs used.
 			writeError(w, http.StatusNotFound, "code-not-found",

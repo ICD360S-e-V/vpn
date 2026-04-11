@@ -13,14 +13,13 @@ on:
       - '.github/workflows/agent.yml'
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: agent
-
 jobs:
   test:
     name: vet + test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -36,6 +35,9 @@ jobs:
     name: build static linux/amd64
     runs-on: ubuntu-latest
     needs: test
+    defaults:
+      run:
+        working-directory: agent
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -70,8 +72,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-    # Don't run on PRs (no secrets) — the gate above already excludes them
-    # but the env-var-check below makes the dependency explicit.
+    # NOTE: this job intentionally does NOT inherit
+    # `defaults.run.working-directory: agent` from the workflow
+    # level (which is why test/build override it on a per-job basis
+    # above). The deploy job works from the repo root so the
+    # download-artifact path and the rsync stage paths are
+    # unambiguous. Same M6.5 lesson the Flutter workflow learned.
     steps:
       - uses: actions/checkout@v6
 
@@ -79,7 +85,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: vpn-agent-linux-amd64
-          path: agent/
+          path: dist
 
       - name: Deploy via SSH (rsync into vpn-deploy drop dir)
         if: env.VPN_DEPLOY_SSH_KEY != ''
@@ -90,7 +96,10 @@ jobs:
           VPN_DEPLOY_SSH_HOST: ${{ secrets.VPN_DEPLOY_SSH_HOST }}
         run: |
           set -e
-          chmod +x agent/vpn-agent
+          ls -la dist/
+          chmod +x dist/vpn-agent
+          file dist/vpn-agent
+
           mkdir -p ~/.ssh
           echo "$VPN_DEPLOY_SSH_KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
@@ -102,11 +111,11 @@ jobs:
           # The vpn-deploy user has rrsync -wo /var/www/html. We drop
           # the new binary at /var/www/html/_agent_drop/vpn-agent;
           # a systemd path unit on the server (vpn-agent-deploy.path)
-          # detects the file, validates it's an ELF, installs it to
+          # detects the file, validates it's an ELF, installs to
           # /usr/local/sbin/vpn-agent, restarts vpn-agent.service,
           # and removes the drop file. End-to-end CI → live in ~10s.
           mkdir -p stage/_agent_drop
-          cp agent/vpn-agent stage/_agent_drop/vpn-agent
+          cp dist/vpn-agent stage/_agent_drop/vpn-agent
           rsync -rlvz --no-times --no-owner --no-group --no-perms \
             -e "ssh -i ~/.ssh/deploy -p $PORT -o StrictHostKeyChecking=accept-new" \
             stage/_agent_drop \

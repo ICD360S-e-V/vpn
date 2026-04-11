@@ -117,8 +117,8 @@ func cmdServe(args []string) {
 		"plaintext listener for the public /enroll endpoint, behind nginx (empty disables)")
 	enrollStorePath := fs.String("enroll-store", "/var/lib/vpn-agent/enrollment_codes.json",
 		"file-backed store of pending enrollment codes")
-	enrollRateLimit := fs.Int("enroll-rate-limit", 5,
-		"max enrollment attempts per source IP per minute")
+	enrollRateLimit := fs.Int("enroll-rate-limit", 60,
+		"max enrollment attempts SERVER-WIDE per minute (DoS protection only — see ratelimit.go for why per-IP was dropped)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}

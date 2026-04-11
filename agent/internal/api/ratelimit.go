@@ -5,47 +5,57 @@ import (
 	"time"
 )
 
-// RateLimiter is a tiny in-memory fixed-window rate limiter keyed by
-// arbitrary string (we use the client IP). Counts reset after every
-// `window` interval. Used by the public enrollment endpoint to make
-// brute-forcing the 16-char code impractical.
+// RateLimiter is a server-wide fixed-window counter. Used to cap the
+// global enrollment attempt rate.
 //
-// Implementation notes:
-//   - Fixed window, not sliding window. The window resets when the
-//     first request after the window expiry arrives. Bursts at the
-//     edge of two windows can briefly double the limit; for the
-//     enrollment use case (5 per minute) that is fine.
-//   - The reset is lazy. There is no goroutine; we just check
-//     `time.Since(lastReset)` on every Allow() call.
-//   - Thread safe.
+// Why this is NOT keyed by client IP (M7.1.1):
+//   - Mobile carriers + corporate NATs put thousands of legit users
+//     behind a single IPv4 address; an IP-based limiter would either
+//     be too tight (false positives) or too loose to matter.
+//   - An attacker who wants to brute-force the 16-char code can
+//     trivially rotate IPs (cellular, residential proxies, Tor,
+//     IPv6 prefix delegation). Per-IP rate limiting against an
+//     IP-rotating attacker is theatre.
+//   - The actual security of the enrollment endpoint comes from the
+//     code's entropy (32^16 ≈ 2^80, brute-force-impossible at any
+//     rate the universe can support), the 10-minute TTL, the
+//     single-use semantics, and the out-of-band delivery channel
+//     (the admin reads the code via SSH, not via the public network).
+//   - The server-wide limit is therefore a DoS-mitigation measure,
+//     not a primary defence: stop a runaway loop from saturating
+//     the agent without penalising any specific client.
+//
+// Implementation: fixed window, not sliding. Lazy reset on every
+// Allow() call (no goroutine). Thread safe.
 type RateLimiter struct {
 	mu        sync.Mutex
-	counts    map[string]int
+	count     int
 	limit     int
 	window    time.Duration
 	lastReset time.Time
 }
 
-// NewRateLimiter constructs a limiter that allows up to `limit`
-// requests per key per `window`.
+// NewRateLimiter constructs a server-wide limiter that allows up to
+// `limit` requests per `window`. Suitable defaults for the
+// enrollment endpoint: 60 per minute (~1/sec average).
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return &RateLimiter{
-		counts:    map[string]int{},
 		limit:     limit,
 		window:    window,
 		lastReset: time.Now(),
 	}
 }
 
-// Allow returns true if this request should be processed, false if
-// the key has hit its limit in the current window.
-func (rl *RateLimiter) Allow(key string) bool {
+// Allow returns true if this request should be processed. Counts ALL
+// attempts globally; the key parameter is ignored — kept only so
+// existing call sites compile during the M7.1.1 rate-limit redesign.
+func (rl *RateLimiter) Allow(_ string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	if time.Since(rl.lastReset) > rl.window {
-		rl.counts = map[string]int{}
+		rl.count = 0
 		rl.lastReset = time.Now()
 	}
-	rl.counts[key]++
-	return rl.counts[key] <= rl.limit
+	rl.count++
+	return rl.count <= rl.limit
 }

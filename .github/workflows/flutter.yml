@@ -4,10 +4,12 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-    paths-ignore:
-      - 'agent/**'
-      - 'docs/**'
-      - 'CHANGELOG.md'
+    # Whitelist app/ + this exact workflow file. Avoids re-running
+    # the whole 6-job build matrix when only the agent code,
+    # docs, or the agent CI workflow change.
+    paths:
+      - 'app/**'
+      - '.github/workflows/flutter.yml'
   pull_request:
     paths:
       - 'app/**'
