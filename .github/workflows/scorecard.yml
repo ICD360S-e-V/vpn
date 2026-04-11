@@ -1,0 +1,55 @@
+name: OpenSSF Scorecard
+
+# OpenSSF Scorecard runs 18 automated security health checks
+# (signed releases, branch protection, dependency pinning, code
+# review coverage, SAST presence, etc.) and publishes a score
+# (0-10) to the Security tab and to securityscorecards.dev.
+#
+# Findings land in Security → Code scanning so they're searchable
+# and trackable alongside CodeQL findings.
+
+on:
+  branch_protection_rule:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 7 * * 2'  # weekly Tuesday 07:23 UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # write findings to the Security tab
+      id-token: write          # publish results to OpenSSF
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results: false because true requires the
+          # repo to be enrolled in the OpenSSF dataset, which
+          # exposes the score externally. Keep it local for now;
+          # flip to true once we're comfortable with the score.
+          publish_results: false
+
+      - name: Upload SARIF
+        uses: actions/upload-artifact@v7
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 7
+
+      - name: Upload to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

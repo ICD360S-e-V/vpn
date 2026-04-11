@@ -35,6 +35,12 @@ jobs:
     name: build static linux/amd64
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: read
+      # M7.10: SLSA build provenance via attest-build-provenance.
+      # See the matching block in flutter.yml for the rationale.
+      id-token: write
+      attestations: write
     defaults:
       run:
         working-directory: agent
@@ -60,6 +66,13 @@ jobs:
             -o vpn-agent ./cmd/vpn-agent
           file vpn-agent
           ls -la vpn-agent
+
+      - name: Generate SLSA build provenance attestation
+        # Cryptographic supply-chain proof for the agent binary.
+        # Verify with: gh attestation verify vpn-agent --owner ICD360S-e-V
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: agent/vpn-agent
 
       - uses: actions/upload-artifact@v7
         with:

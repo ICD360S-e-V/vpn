@@ -1,0 +1,43 @@
+# ICD360SVPN — code ownership rules
+#
+# Every PR that touches a path matched here automatically requests
+# a review from the listed owner(s). Branch protection on `main`
+# can be configured to require these reviews before merge —
+# enabled in M7.10.
+#
+# Order matters: later patterns override earlier ones for the
+# same file.
+#
+# Syntax: <pattern> <owner1> <owner2>...
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything not matched below.
+* @icd360sevofficial
+
+# Security-critical: enrollment, mTLS, certificate handling.
+# These paths receive extra scrutiny because a bug here can leak
+# admin credentials to the wrong device.
+/agent/internal/mtls/      @icd360sevofficial
+/agent/internal/enroll/    @icd360sevofficial
+/agent/internal/api/enroll.go  @icd360sevofficial
+/app/lib/src/api/enroll_client.dart  @icd360sevofficial
+/app/lib/src/api/secure_store.dart   @icd360sevofficial
+/app/lib/src/models/enrollment_bundle.dart  @icd360sevofficial
+
+# CI/CD pipeline. Modifying these can change what gets shipped to
+# every user via auto-update — and the supply chain attack surface
+# starts here.
+/.github/workflows/        @icd360sevofficial
+/.github/actions/          @icd360sevofficial
+/.github/dependabot.yml    @icd360sevofficial
+
+# Release infrastructure: anything that affects how binaries are
+# produced, signed, or published.
+/release-please-config.json    @icd360sevofficial
+/.release-please-manifest.json @icd360sevofficial
+/version.txt                   @icd360sevofficial
+/CHANGELOG.md                  @icd360sevofficial
+
+# Security policy itself.
+/SECURITY.md   @icd360sevofficial
+/.github/CODEOWNERS  @icd360sevofficial

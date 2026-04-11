@@ -1,0 +1,61 @@
+# ICD360SVPN — Dependabot configuration
+#
+# Dependabot watches for outdated and vulnerable dependencies in
+# every ecosystem in the repo and opens PRs automatically. Security
+# updates (CVEs) ship as soon as a fix is published; version updates
+# (non-security) are batched weekly to keep PR noise reasonable.
+#
+# Three ecosystems live in this repo:
+#   1. Go modules        — agent/ (vpn-agent daemon, single static binary)
+#   2. Flutter / pub.dev — app/ (cross-platform admin app)
+#   3. GitHub Actions    — .github/workflows/ + .github/actions/
+
+version: 2
+updates:
+  # Go modules in agent/
+  - package-ecosystem: gomod
+    directory: /agent
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - go
+
+  # Flutter / Dart packages in app/
+  - package-ecosystem: pub
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - flutter
+
+  # GitHub Actions versions across .github/workflows/
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies
+      - github-actions

@@ -402,6 +402,15 @@ jobs:
       - build_ios
     permissions:
       contents: write
+      # M7.10: SLSA build provenance via attest-build-provenance.
+      # `id-token: write` lets the runner mint a short-lived OIDC
+      # token from the GitHub OIDC provider, which the attest action
+      # uses to sign the attestation via Sigstore Fulcio. `attestations: write`
+      # lets the runner upload the resulting in-toto attestation to
+      # the GitHub Attestations store, accessible later via
+      # `gh attestation verify --owner ICD360S-e-V <file>`.
+      id-token: write
+      attestations: write
     # NOTE: this job intentionally does NOT inherit defaults.run.working-directory
     # = app from individual build jobs. We work from the repo root here so the
     # paths to dist/ and out/ are unambiguous.
@@ -550,6 +559,30 @@ jobs:
           set -e
           cp CHANGELOG.md out/updates/CHANGELOG.md
           ls -la out/updates/
+
+      - name: Generate SLSA build provenance attestations
+        # M7.10: cryptographic supply-chain proof. Each release
+        # binary gets an in-toto attestation signed by Sigstore
+        # Fulcio (via the runner's OIDC identity) that ties the
+        # artifact's SHA256 to the GitHub Actions run that built
+        # it (commit, workflow file, runner image, build inputs).
+        #
+        # Verify after release with:
+        #   gh attestation verify <file> --owner ICD360S-e-V
+        #
+        # Defense against: someone uploading a backdoored DMG
+        # to the GitHub Releases page out-of-band, OR a hijacked
+        # workflow shipping a tampered binary. The attestation
+        # ties the binary to a specific clean source commit; any
+        # mismatch fails verification.
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            out/download/vpn-management_icd360sev/linux/*
+            out/download/vpn-management_icd360sev/macos/*
+            out/download/vpn-management_icd360sev/windows/*
+            out/download/vpn-management_icd360sev/android/*
+            out/download/vpn-management_icd360sev/ios/*
 
       - name: Create / update GitHub Release
         env:
