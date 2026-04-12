@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../api/api_client.dart';
 import '../api/app_logger.dart';
 import '../api/update_service.dart';
 import '../api/vpn_tunnel.dart';
 import '../app.dart';
+import '../models/peer.dart';
 import '../features/about/changelog_screen.dart';
 import '../features/updates/update_available_dialog.dart';
 import '../models/health.dart';
@@ -30,6 +30,8 @@ class _AppFooterState extends ConsumerState<AppFooter> {
   String _version = '';
   bool _checking = false;
   Health? _health;
+  List<Peer> _peers = const <Peer>[];
+  int _livePeers = 0;
   Timer? _healthTimer;
   Timer? _clockTimer;
   DateTime? _serverTime;
@@ -44,7 +46,13 @@ class _AppFooterState extends ConsumerState<AppFooter> {
     );
     _clockTimer = Timer.periodic(
       const Duration(seconds: 1),
-      (_) { if (mounted) setState(() {}); },
+      (_) {
+        if (!mounted) return;
+        if (_serverTime != null) {
+          _serverTime = _serverTime!.add(const Duration(seconds: 1));
+        }
+        setState(() {});
+      },
     );
     unawaited(_fetchHealth());
   }
@@ -76,15 +84,32 @@ class _AppFooterState extends ConsumerState<AppFooter> {
       return;
     }
     try {
-      final h = await phase.client.health();
+      final results = await Future.wait(<Future<dynamic>>[
+        phase.client.health(),
+        phase.client.listPeers(),
+      ]);
       if (!mounted) return;
+      final h = results[0] as Health;
+      final peers = results[1] as List<Peer>;
+      // Peer is "live" if last handshake < 3 minutes ago
+      final now = DateTime.now().toUtc();
+      final live = peers.where((p) {
+        if (p.lastHandshakeAt == null) return false;
+        return now.difference(p.lastHandshakeAt!).inMinutes < 3;
+      }).length;
       setState(() {
         _health = h;
+        _peers = peers;
+        _livePeers = live;
         _serverTime = h.serverTime;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _health = null);
+      setState(() {
+        _health = null;
+        _peers = const <Peer>[];
+        _livePeers = 0;
+      });
     }
   }
 
@@ -139,6 +164,53 @@ class _AppFooterState extends ConsumerState<AppFooter> {
     );
   }
 
+  void _showPeersDetails() {
+    final now = DateTime.now().toUtc();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Peers (${_peers.length})'),
+        content: SizedBox(
+          width: 400,
+          child: _peers.isEmpty
+              ? const Text('Niciun peer configurat.')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _peers.map((p) {
+                    final isLive = p.lastHandshakeAt != null &&
+                        now.difference(p.lastHandshakeAt!).inMinutes < 3;
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(
+                        isLive ? Icons.circle : Icons.circle_outlined,
+                        size: 12,
+                        color: isLive ? Colors.green : Colors.grey,
+                      ),
+                      title: Text(
+                        p.name.isEmpty ? '(unnamed)' : p.name,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        '${p.allowedIPs.join(", ")}${p.endpoint != null && p.endpoint!.isNotEmpty ? " — ${p.endpoint}" : ""}',
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                      ),
+                      trailing: Text(
+                        isLive ? 'LIVE' : 'offline',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isLive ? Colors.green : Colors.grey,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+      ),
+    );
+  }
+
   void _showAgentDetails() {
     final h = _health;
     _showServiceDetails('VPN Agent', <String>[
@@ -177,11 +249,6 @@ class _AppFooterState extends ConsumerState<AppFooter> {
     final theme = Theme.of(context);
     final h = _health;
     final online = h != null;
-
-    // Increment server time locally each second
-    if (_serverTime != null) {
-      _serverTime = _serverTime!.add(const Duration(seconds: 1));
-    }
 
     return Container(
       width: double.infinity,
@@ -240,6 +307,31 @@ class _AppFooterState extends ConsumerState<AppFooter> {
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: online ? Colors.green : theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Peers
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: online ? _showPeersDetails : null,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(Icons.people, size: 14, color: online ? Colors.green : theme.colorScheme.outline),
+                  const SizedBox(width: 2),
+                  Text(
+                    online ? '$_livePeers/${_peers.length}' : '-',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: online ? (_livePeers > 0 ? Colors.green : theme.colorScheme.onSurfaceVariant) : theme.colorScheme.outline,
                     ),
                   ),
                 ],
