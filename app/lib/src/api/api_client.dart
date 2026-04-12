@@ -19,19 +19,24 @@ import 'mtls_context.dart';
 import 'user_agent.dart';
 
 class ApiClient {
-  ApiClient({
-    required this.baseUrl,
+  ApiClient._({required this.baseUrl, required Dio dio}) : _dio = dio;
+
+  /// Async factory — required because buildMtlsContext is async on
+  /// Apple platforms (PEM → PKCS12 conversion via openssl).
+  static Future<ApiClient> create({
+    required String baseUrl,
     required String certPem,
     required String keyPem,
     required String caPem,
-  }) : _dio = _buildDio(
-          baseUrl: baseUrl,
-          ctx: buildMtlsContext(
-            certPem: certPem,
-            keyPem: keyPem,
-            caPem: caPem,
-          ),
-        );
+  }) async {
+    final ctx = await buildMtlsContext(
+      certPem: certPem,
+      keyPem: keyPem,
+      caPem: caPem,
+    );
+    final dio = _buildDio(baseUrl: baseUrl, ctx: ctx);
+    return ApiClient._(baseUrl: baseUrl, dio: dio);
+  }
 
   final String baseUrl;
   final Dio _dio;
