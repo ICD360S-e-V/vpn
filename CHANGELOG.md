@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.8](https://github.com/ICD360S-e-V/vpn/compare/v1.10.7...v1.10.8) (2026-04-12)
+
+
+### Bug Fixes
+
+* fallback for openssl without -legacy flag (LibreSSL on macOS) ([4c4a897](https://github.com/ICD360S-e-V/vpn/commit/4c4a8974529fc52a6b5d0b58f1c1bf7bc0f223d4))
+
 ## [1.10.7](https://github.com/ICD360S-e-V/vpn/compare/v1.10.6...v1.10.7) (2026-04-12)
 
 
