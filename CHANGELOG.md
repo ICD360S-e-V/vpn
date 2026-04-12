@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.11.3](https://github.com/ICD360S-e-V/vpn/compare/v1.11.2...v1.11.3) (2026-04-12)
+
+
+### Bug Fixes
+
+* use AllowedIPs 0.0.0.0/0 — WireGuard App handles it correctly ([a243462](https://github.com/ICD360S-e-V/vpn/commit/a24346202a9df4f12d47c69c459a972345ff0ed4))
+
 ## [1.11.2](https://github.com/ICD360S-e-V/vpn/compare/v1.11.1...v1.11.2) (2026-04-12)
 
 
