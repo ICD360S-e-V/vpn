@@ -19,6 +19,18 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.11.0](https://github.com/ICD360S-e-V/vpn/compare/v1.10.10...v1.11.0) (2026-04-12)
+
+
+### Features
+
+* replace wg-quick with macOS Configuration Profiles ([b161dea](https://github.com/ICD360S-e-V/vpn/commit/b161dea1b2e88414ec226e385390bed70eabe051))
+
+
+### Bug Fixes
+
+* simplify connect flow for mobileconfig approach ([6d960f6](https://github.com/ICD360S-e-V/vpn/commit/6d960f6e88626b0080147c7750975e6c43612539))
+
 ## [1.10.10](https://github.com/ICD360S-e-V/vpn/compare/v1.10.9...v1.10.10) (2026-04-12)
 
 
