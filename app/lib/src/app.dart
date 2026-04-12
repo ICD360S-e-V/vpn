@@ -84,7 +84,7 @@ class AppPhaseController extends Notifier<AppPhase> {
         state = const NeedsEnrollment();
         return;
       }
-      final client = ApiClient(
+      final client = await ApiClient.create(
         baseUrl: id.agentUrl,
         certPem: id.certPem,
         keyPem: id.keyPem,
@@ -114,7 +114,7 @@ class AppPhaseController extends Notifier<AppPhase> {
         wgPublicKey: bundle.wireguardPublicKey,
         wgAddress: bundle.wireguardAddress,
       );
-      final client = ApiClient(
+      final client = await ApiClient.create(
         baseUrl: bundle.agentUrl,
         certPem: bundle.certPem,
         keyPem: bundle.keyPem,
