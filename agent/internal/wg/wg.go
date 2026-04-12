@@ -554,7 +554,9 @@ func renderClientConfig(in clientConfigInput) string {
 	// replacing the default route with 0.0.0.0/0; the two /1 routes
 	// cover the full address space while keeping the original gateway
 	// intact. Same trick for IPv6.
-	fmt.Fprintln(&b, "AllowedIPs          = 0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1")
+	// IPv4 only — server has no IPv6. IPv6 is blocked on the client
+	// via pf rules to prevent leaking the ISP's IPv6 address.
+	fmt.Fprintln(&b, "AllowedIPs          = 0.0.0.0/1, 128.0.0.0/1")
 	fmt.Fprintln(&b, "PersistentKeepalive = 25")
 	return b.String()
 }
