@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.5.2](https://github.com/ICD360S-e-V/vpn/compare/v1.5.1...v1.5.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* auto-allow wireguard-go through macOS Application Firewall ([b4c5407](https://github.com/ICD360S-e-V/vpn/commit/b4c54070b526608922fb5e994db20c7aaf654923))
+
 ## [1.5.1](https://github.com/ICD360S-e-V/vpn/compare/v1.5.0...v1.5.1) (2026-04-12)
 
 
