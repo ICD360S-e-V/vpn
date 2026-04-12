@@ -1,11 +1,7 @@
 // ICD360SVPN — lib/src/features/connection/connection_screen.dart
 //
-// Connection diagnostics dashboard following industry-standard
-// VPN client leak detection practices. Shows:
-//   - Current public IP
-//   - DNS servers in use + leak indicator
-//   - IPv6 leak indicator
-//   - Overall protection status
+// Status diagnostics dashboard. Shows public IP (v4+v6), DNS
+// servers with leak indicator, IPv6 leak status, DNS encryption.
 
 import 'dart:async';
 
@@ -60,7 +56,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Conexiune'),
+        title: const Text('Status'),
         actions: <Widget>[
           IconButton(
             tooltip: 'Reverifică',
@@ -87,65 +83,18 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     final info = _info!;
-    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        // Overall status banner
         _ProtectionBanner(info: info),
         const SizedBox(height: 16),
-
-        // Public IP card
-        _InfoCard(
-          icon: Icons.language,
-          title: 'IP Public',
-          trailing: _CopyableText(text: info.publicIp),
-          status: info.isVpnActive ? _Status.ok : _Status.neutral,
-          subtitle: info.isVpnActive
-              ? 'Traficul trece prin VPN'
-              : 'IP-ul real al providerului tău',
-        ),
+        _IpCard(info: info),
         const SizedBox(height: 12),
-
-        // DNS card
         _DnsCard(info: info),
         const SizedBox(height: 12),
-
-        // IPv6 card
-        _InfoCard(
-          icon: Icons.router,
-          title: 'IPv6',
-          status: info.isIpv6Leaking
-              ? _Status.error
-              : (info.ipv6Detected ? _Status.warning : _Status.ok),
-          subtitle: info.isIpv6Leaking
-              ? 'LEAK — IPv6 detectat: ${info.ipv6Address}'
-              : (info.ipv6Detected
-                  ? 'IPv6 activ (VPN oprit)'
-                  : 'IPv6 blocat — fără leak'),
-          trailing: Icon(
-            info.isIpv6Leaking
-                ? Icons.warning_amber
-                : Icons.check_circle_outline,
-            color: info.isIpv6Leaking ? Colors.red : Colors.green,
-          ),
-        ),
+        _Ipv6Card(info: info),
         const SizedBox(height: 12),
-
-        // DNS encryption info card
-        _InfoCard(
-          icon: Icons.lock_outline,
-          title: 'Criptare DNS',
-          status: info.isDnsSafe ? _Status.ok : _Status.neutral,
-          subtitle: info.isDnsSafe
-              ? 'DoH activ — DNS queries criptate prin Quad9'
-              : 'DNS-ul nu trece prin VPN',
-          trailing: Icon(
-            info.isDnsSafe ? Icons.verified_outlined : Icons.lock_open,
-            color: info.isDnsSafe ? Colors.green : theme.colorScheme.outline,
-          ),
-        ),
-
+        _DnsEncryptionCard(info: info),
         if (_checking)
           const Padding(
             padding: EdgeInsets.only(top: 24),
@@ -155,10 +104,6 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     );
   }
 }
-
-// --- Helper widgets ---
-
-enum _Status { ok, warning, error, neutral }
 
 class _ProtectionBanner extends StatelessWidget {
   const _ProtectionBanner({required this.info});
@@ -200,10 +145,7 @@ class _ProtectionBanner extends StatelessWidget {
           Icon(icon, color: fg, size: 32),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.titleMedium?.copyWith(color: fg),
-            ),
+            child: Text(text, style: theme.textTheme.titleMedium?.copyWith(color: fg)),
           ),
         ],
       ),
@@ -211,29 +153,9 @@ class _ProtectionBanner extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.icon,
-    required this.title,
-    required this.status,
-    required this.subtitle,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String title;
-  final _Status status;
-  final String subtitle;
-  final Widget? trailing;
-
-  Color _statusColor(BuildContext context) {
-    return switch (status) {
-      _Status.ok => Colors.green,
-      _Status.warning => Colors.orange,
-      _Status.error => Colors.red,
-      _Status.neutral => Theme.of(context).colorScheme.outline,
-    };
-  }
+class _IpCard extends StatelessWidget {
+  const _IpCard({required this.info});
+  final ConnectionInfo info;
 
   @override
   Widget build(BuildContext context) {
@@ -241,29 +163,57 @@ class _InfoCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, color: _statusColor(context), size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(title, style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+            Row(
+              children: <Widget>[
+                Icon(Icons.language, color: info.isVpnActive ? Colors.green : theme.colorScheme.outline, size: 28),
+                const SizedBox(width: 12),
+                Text('IP Public', style: theme.textTheme.titleSmall),
+              ],
             ),
-            if (trailing != null) trailing!,
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            _IpRow(label: 'IPv4', value: info.publicIpv4, badge: info.isVpnActive ? 'VPN' : null),
+            const SizedBox(height: 6),
+            _IpRow(
+              label: 'IPv6',
+              value: info.publicIpv6 == 'nu' ? 'nedisponibil' : info.publicIpv6,
+              badge: info.isIpv6Leaking ? 'LEAK!' : null,
+              badgeColor: Colors.red,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _IpRow extends StatelessWidget {
+  const _IpRow({required this.label, required this.value, this.badge, this.badgeColor});
+  final String label;
+  final String value;
+  final String? badge;
+  final Color? badgeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 40,
+          child: Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: _CopyableText(text: value)),
+        if (badge != null) ...<Widget>[
+          const SizedBox(width: 8),
+          Text(badge!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeColor ?? Colors.green.shade700)),
+        ],
+      ],
     );
   }
 }
@@ -283,11 +233,7 @@ class _DnsCard extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(
-                  Icons.dns,
-                  color: info.isDnsSafe ? Colors.green : Colors.orange,
-                  size: 28,
-                ),
+                Icon(Icons.dns, color: info.isDnsSafe ? Colors.green : (info.isVpnActive ? Colors.orange : theme.colorScheme.outline), size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -298,13 +244,10 @@ class _DnsCard extends StatelessWidget {
                       Text(
                         info.isDnsSafe
                             ? 'Toate query-urile trec prin AdGuard Home'
-                            : 'ATENȚIE — DNS leak detectat!',
+                            : (info.isVpnActive ? 'ATENȚIE — DNS leak detectat!' : 'DNS de la provider (VPN oprit)'),
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: info.isDnsSafe
-                              ? theme.colorScheme.onSurfaceVariant
-                              : Colors.orange.shade800,
-                          fontWeight:
-                              info.isDnsSafe ? null : FontWeight.w600,
+                          color: info.isVpnActive && !info.isDnsSafe ? Colors.orange.shade800 : theme.colorScheme.onSurfaceVariant,
+                          fontWeight: info.isVpnActive && !info.isDnsSafe ? FontWeight.w600 : null,
                         ),
                       ),
                     ],
@@ -315,33 +258,132 @@ class _DnsCard extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            ...info.dnsServers.map((server) {
-              final isSafe = server == '10.8.0.1';
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: <Widget>[
-                    Icon(
-                      isSafe ? Icons.check_circle : Icons.warning_amber,
-                      size: 16,
-                      color: isSafe ? Colors.green : Colors.orange,
-                    ),
-                    const SizedBox(width: 8),
-                    _CopyableText(text: server),
-                    const SizedBox(width: 8),
-                    Text(
-                      isSafe ? 'AdGuard (VPN)' : 'extern — leak!',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isSafe
-                            ? Colors.green
-                            : Colors.orange.shade800,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+            if (info.dnsServersV4.isNotEmpty) ...<Widget>[
+              Text('IPv4', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 4),
+              ...info.dnsServersV4.map((s) => _DnsRow(server: s)),
+              const SizedBox(height: 8),
+            ],
+            if (info.dnsServersV6.isNotEmpty) ...<Widget>[
+              Text('IPv6', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 4),
+              ...info.dnsServersV6.map((s) => _DnsRow(server: s)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DnsRow extends StatelessWidget {
+  const _DnsRow({required this.server});
+  final String server;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSafe = server == '10.8.0.1';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: <Widget>[
+          Icon(isSafe ? Icons.check_circle : Icons.warning_amber, size: 16, color: isSafe ? Colors.green : Colors.orange),
+          const SizedBox(width: 8),
+          _CopyableText(text: server),
+          const SizedBox(width: 8),
+          Text(isSafe ? 'AdGuard (VPN)' : 'extern', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: isSafe ? Colors.green : Colors.orange.shade800)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Ipv6Card extends StatelessWidget {
+  const _Ipv6Card({required this.info});
+  final ConnectionInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final String subtitle;
+    final Color iconColor;
+    final IconData icon;
+
+    if (info.isVpnActive && !info.hasIpv6) {
+      subtitle = 'Blocat — nicio adresă IPv6 vizibilă';
+      iconColor = Colors.green;
+      icon = Icons.check_circle_outline;
+    } else if (info.isIpv6Leaking) {
+      subtitle = 'LEAK — adresa IPv6 a providerului este vizibilă: ${info.publicIpv6}';
+      iconColor = Colors.red;
+      icon = Icons.warning_amber;
+    } else if (info.hasIpv6) {
+      subtitle = 'Adresa IPv6 a providerului: ${info.publicIpv6}';
+      iconColor = theme.colorScheme.outline;
+      icon = Icons.info_outline;
+    } else {
+      subtitle = 'Providerul nu oferă IPv6';
+      iconColor = theme.colorScheme.outline;
+      icon = Icons.info_outline;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.router, color: iconColor, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('IPv6', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(
+                    color: info.isIpv6Leaking ? Colors.red.shade800 : theme.colorScheme.onSurfaceVariant,
+                  )),
+                ],
+              ),
+            ),
+            Icon(icon, color: iconColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DnsEncryptionCard extends StatelessWidget {
+  const _DnsEncryptionCard({required this.info});
+  final ConnectionInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool encrypted = info.isVpnActive && info.isDnsSafe;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: <Widget>[
+            Icon(encrypted ? Icons.lock_outline : Icons.lock_open, color: encrypted ? Colors.green : theme.colorScheme.outline, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Criptare DNS', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    encrypted
+                        ? 'DoH activ — DNS queries criptate prin Quad9'
+                        : (info.isVpnActive ? 'DNS nu trece complet prin VPN' : 'Necriptat — conectează-te la VPN'),
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -360,21 +402,12 @@ class _CopyableText extends StatelessWidget {
       onTap: () {
         Clipboard.setData(ClipboardData(text: text));
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 2),
-            content: Text('Copiat: $text'),
-          ),
+          SnackBar(duration: const Duration(seconds: 2), content: Text('Copiat: $text')),
         );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        child: Text(text, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w500)),
       ),
     );
   }
