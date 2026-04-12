@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.4.5](https://github.com/ICD360S-e-V/vpn/compare/v1.4.4...v1.4.5) (2026-04-12)
+
+
+### Bug Fixes
+
+* check VPN status before API calls in Health screen ([c76d79a](https://github.com/ICD360S-e-V/vpn/commit/c76d79a9d145d0d2f6b5beda6ace40aa4e484aad))
+* check VPN status before API calls in Peers screen ([ce79e67](https://github.com/ICD360S-e-V/vpn/commit/ce79e674fc4478df79157ad6309e7ccffc1758ef))
+* log transport errors as info, not error ([e2dc58d](https://github.com/ICD360S-e-V/vpn/commit/e2dc58dcc383a915fc15f77db250e3734975a0e2))
+
 ## [1.4.4](https://github.com/ICD360S-e-V/vpn/compare/v1.4.3...v1.4.4) (2026-04-12)
 
 
