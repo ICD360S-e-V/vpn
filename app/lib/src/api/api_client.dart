@@ -153,8 +153,7 @@ class ApiClient {
       // The raw dart:io message ("...this indicates an error which
       // most likely cannot be solved by the library") is meaningless
       // to a non-developer; replace it with a clear Romanian prompt.
-      final reason = dioErr.message ?? dioErr.error?.toString() ?? 'unknown';
-      appLogger.error('API', '$method $path — transport error: $reason');
+      appLogger.info('API', '$method $path — VPN necesară (agent inaccesibil)');
       throw ApiError(
         kind: ApiErrorKind.transport,
         message: 'Vă rugăm să vă conectați la VPN pentru a fi afișate '
