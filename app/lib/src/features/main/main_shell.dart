@@ -21,11 +21,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/api_client.dart';
+import '../../api/app_logger.dart';
 import '../../api/app_prefs.dart';
 import '../../api/update_service.dart';
 import '../../api/vpn_tunnel.dart';
 import '../../app.dart';
 import '../../common/app_footer.dart';
+import '../../common/log_console.dart';
+import '../connection/connection_screen.dart';
 import '../health/health_screen.dart';
 import '../peers/peers_screen.dart';
 import '../settings/settings_screen.dart';
@@ -66,6 +69,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final s = await VpnTunnel.status();
     if (!mounted) return;
     if (s != _tunnelStatus) {
+      appLogger.info('VPN', 'Status: ${s.name}');
       setState(() => _tunnelStatus = s);
     }
   }
@@ -157,7 +161,11 @@ class _MainShellState extends ConsumerState<MainShell> {
       await _pollStatus();
     } on VpnTunnelException catch (e) {
       messenger.hideCurrentSnackBar();
-      if (e.userCancelled) return;
+      if (e.userCancelled) {
+        appLogger.info('VPN', 'Anulat de utilizator');
+        return;
+      }
+      appLogger.error('VPN', e.message);
       messenger.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 6),
@@ -166,6 +174,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       );
     } catch (e) {
       messenger.hideCurrentSnackBar();
+      appLogger.error('VPN', 'Eroare neașteptată: $e');
       messenger.showSnackBar(
         SnackBar(content: Text('Eroare neașteptată: $e')),
       );
@@ -207,6 +216,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       PeersScreen(client: widget.client),
+      const ConnectionScreen(),
       HealthScreen(client: widget.client),
       const SettingsScreen(),
     ];
@@ -283,6 +293,11 @@ class _MainShellState extends ConsumerState<MainShell> {
                       label: Text('Peers'),
                     ),
                     NavigationRailDestination(
+                      icon: Icon(Icons.shield_outlined),
+                      selectedIcon: Icon(Icons.shield),
+                      label: Text('Conexiune'),
+                    ),
+                    NavigationRailDestination(
                       icon: Icon(Icons.favorite_outline),
                       selectedIcon: Icon(Icons.favorite),
                       label: Text('Health'),
@@ -329,6 +344,7 @@ class _MainShellState extends ConsumerState<MainShell> {
               ],
             ),
           ),
+          const LogConsole(),
           const AppFooter(),
         ],
       ),
