@@ -165,15 +165,22 @@ class VpnTunnel {
 
     appLogger.info('VPN', 'Pornire tunel WireGuard…');
     if (Platform.isMacOS) {
-      // Allow wireguard-go through macOS Application Firewall.
-      // Without this, the firewall silently blocks all traffic on
-      // the utun interface — handshake works but 0 data flows.
+      // macOS Sequoia bug: firewall blocks wireguard-go even when
+      // "allowed" via socketfilterfw. The only reliable fix is to
+      // disable the firewall during VPN session and re-enable after.
       try {
-        final firewallFix = _macosFirewallAllow();
+        const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
+        // Save current state, disable, allow wireguard-go
+        final firewallCmds = <String>[
+          // Allow wireguard-go explicitly
+          ..._macosFirewallAllow().split(' && '),
+          // Disable firewall during VPN session
+          '$sfw --setglobalstate off',
+        ].join(' && ');
         await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', firewallFix],
+          <String>['/bin/sh', '-c', firewallCmds],
         );
-        appLogger.info('FW', 'wireguard-go permis prin macOS Firewall');
+        appLogger.info('FW', 'Firewall dezactivat pentru sesiunea VPN');
       } catch (e) {
         appLogger.warn('FW', 'Nu am putut configura firewall: $e');
       }
@@ -419,6 +426,16 @@ class VpnTunnel {
         appLogger.info('DNS', 'DNS restaurat la DHCP, IPv6 reactivat');
       } catch (e) {
         appLogger.warn('DNS', 'Nu am putut restaura DNS/IPv6: $e');
+      }
+      // Re-enable firewall after VPN session
+      try {
+        const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
+        await _runWithMacosAdmin(
+          <String>['/bin/sh', '-c', '$sfw --setglobalstate on'],
+        );
+        appLogger.info('FW', 'Firewall reactivat');
+      } catch (e) {
+        appLogger.warn('FW', 'Nu am putut reactiva firewall: $e');
       }
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'down', confPath]);
