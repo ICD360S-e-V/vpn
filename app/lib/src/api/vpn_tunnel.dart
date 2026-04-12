@@ -42,16 +42,28 @@ enum VpnTunnelStatus {
 }
 
 class VpnTunnel {
-  /// Check if WireGuard App is installed.
+  /// Check if WireGuard App is installed on macOS.
+  /// Checks common App Store and direct install paths.
   static Future<bool> isWireGuardAppInstalled() async {
     if (!Platform.isMacOS) return false;
-    // WireGuard App registers as VPN provider
-    final result = await Process.run(
-      '/usr/sbin/scutil', <String>['--nc', 'list'],
-    );
-    if (result.exitCode != 0) return false;
-    return (result.stdout as String).contains('WireGuard') ||
-           (result.stdout as String).contains('com.wireguard');
+    // Check if WireGuard.app exists in standard locations
+    const paths = <String>[
+      '/Applications/WireGuard.app',
+      '/Applications/Utilities/WireGuard.app',
+    ];
+    for (final p in paths) {
+      if (await Directory(p).exists()) return true;
+    }
+    // Also check via mdfind (Spotlight) which finds App Store apps
+    try {
+      final result = await Process.run(
+        '/usr/bin/mdfind', <String>['kMDItemCFBundleIdentifier == "com.wireguard.macos"'],
+      );
+      if (result.exitCode == 0 && (result.stdout as String).trim().isNotEmpty) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   /// Generate and install a .mobileconfig profile for the WireGuard
