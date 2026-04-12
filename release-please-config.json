@@ -25,7 +25,7 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "package-name": "icd360svpn",
+      "component": "",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
