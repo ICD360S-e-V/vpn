@@ -28,6 +28,7 @@ import '../../api/vpn_tunnel.dart';
 import '../../app.dart';
 import '../../common/app_footer.dart';
 import '../../common/log_console.dart';
+import '../adguard/adguard_screen.dart';
 import '../bandwidth/bandwidth_screen.dart';
 import '../connection/connection_screen.dart';
 import '../peers/peers_screen.dart';
@@ -172,6 +173,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       const ConnectionScreen(),
       PeersScreen(client: widget.client),
       BandwidthScreen(client: widget.client),
+      const AdGuardScreen(),
       const SettingsScreen(),
     ];
 
@@ -255,6 +257,11 @@ class _MainShellState extends ConsumerState<MainShell> {
                       icon: Icon(Icons.show_chart_outlined),
                       selectedIcon: Icon(Icons.show_chart),
                       label: Text('Trafic'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.shield_outlined),
+                      selectedIcon: Icon(Icons.shield),
+                      label: Text('AdGuard'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.settings_outlined),
