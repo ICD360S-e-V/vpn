@@ -165,22 +165,17 @@ class VpnTunnel {
 
     appLogger.info('VPN', 'Pornire tunel WireGuard…');
     if (Platform.isMacOS) {
-      // macOS Sequoia bug: firewall blocks wireguard-go even when
-      // "allowed" via socketfilterfw. The only reliable fix is to
-      // disable the firewall during VPN session and re-enable after.
+      // Firewall: allow wireguard-go in Application Firewall +
+      // add pf anchor rules to explicitly pass traffic on utun.
+      // Uses pfctl anchors (com.apple/wireguard) instead of
+      // disabling the firewall — keeps the Mac protected while
+      // allowing VPN traffic. Token is saved for cleanup.
       try {
-        const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
-        // Save current state, disable, allow wireguard-go
-        final firewallCmds = <String>[
-          // Allow wireguard-go explicitly
-          ..._macosFirewallAllow().split(' && '),
-          // Disable firewall during VPN session
-          '$sfw --setglobalstate off',
-        ].join(' && ');
+        final fwCmds = _macosFirewallSetup();
         await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', firewallCmds],
+          <String>['/bin/sh', '-c', fwCmds],
         );
-        appLogger.info('FW', 'Firewall dezactivat pentru sesiunea VPN');
+        appLogger.info('FW', 'pf anchor + socketfilterfw configurat');
       } catch (e) {
         appLogger.warn('FW', 'Nu am putut configura firewall: $e');
       }
@@ -427,15 +422,15 @@ class VpnTunnel {
       } catch (e) {
         appLogger.warn('DNS', 'Nu am putut restaura DNS/IPv6: $e');
       }
-      // Re-enable firewall after VPN session
+      // Cleanup pf anchor rules
       try {
-        const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
+        final fwCleanup = _macosFirewallCleanup();
         await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', '$sfw --setglobalstate on'],
+          <String>['/bin/sh', '-c', fwCleanup],
         );
-        appLogger.info('FW', 'Firewall reactivat');
+        appLogger.info('FW', 'pf anchor reguli șterse');
       } catch (e) {
-        appLogger.warn('FW', 'Nu am putut reactiva firewall: $e');
+        appLogger.warn('FW', 'Nu am putut curăța pf rules: $e');
       }
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'down', confPath]);
@@ -447,23 +442,54 @@ class VpnTunnel {
   /// Runs as admin via osascript. Covers Wi-Fi + Ethernet + USB
   /// (the three common macOS network services).
   ///
-  /// Leak prevention approach:
-  /// Allow wireguard-go through macOS Application Firewall.
-  /// Checks both Apple Silicon and Intel Homebrew paths.
-  static String _macosFirewallAllow() {
+  /// Setup firewall for VPN session:
+  /// 1. Allow wireguard-go in Application Firewall (socketfilterfw)
+  /// 2. Add pf anchor rules to pass all traffic on utun interfaces
+  ///    Uses com.apple/wireguard anchor with token for clean removal.
+  ///    This approach keeps the macOS firewall enabled while allowing
+  ///    WireGuard traffic — no need to disable the firewall.
+  static String _macosFirewallSetup() {
     const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
+    const tokenFile = '/var/run/wireguard/pf_token.txt';
+    const anchor = 'com.apple/wireguard';
     const candidates = <String>[
       '/opt/homebrew/bin/wireguard-go',
       '/usr/local/bin/wireguard-go',
       '/opt/local/bin/wireguard-go',
     ];
-    final cmds = <String>[];
+    final cmds = <String>[
+      // Create token directory
+      'mkdir -p /var/run/wireguard',
+    ];
+    // Allow wireguard-go in Application Firewall
     for (final path in candidates) {
-      // --add is idempotent (no error if already added)
       cmds.add('$sfw --add $path 2>/dev/null || true');
       cmds.add('$sfw --unblockapp $path 2>/dev/null || true');
     }
+    // Add pf anchor rules: pass all traffic on utun interfaces.
+    // -E increases pf reference count (enables pf if needed).
+    // Token is saved for clean removal at disconnect.
+    cmds.add(
+      "echo 'pass quick on utun all' "
+      "| pfctl -a $anchor -Ef - 2>&1 "
+      "| grep 'Token' "
+      "| sed 's/Token : //' > $tokenFile "
+      "|| true",
+    );
     return cmds.join(' && ');
+  }
+
+  /// Cleanup pf anchor rules and release the token.
+  static String _macosFirewallCleanup() {
+    const tokenFile = '/var/run/wireguard/pf_token.txt';
+    const anchor = 'com.apple/wireguard';
+    return [
+      // Flush anchor rules
+      'pfctl -a $anchor -F all 2>/dev/null || true',
+      // Release pf token (decreases reference count)
+      'test -f $tokenFile && pfctl -X \$(cat $tokenFile) 2>/dev/null || true',
+      'rm -f $tokenFile',
+    ].join(' && ');
   }
 
   ///   - Force DNS to VPN's AdGuard Home (10.8.0.1)
