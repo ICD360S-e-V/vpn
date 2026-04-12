@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.13.1](https://github.com/ICD360S-e-V/vpn/compare/v1.13.0...v1.13.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* show 'blocat' for IPv6 when VPN blocks it, not 'nedisponibil' ([213fc66](https://github.com/ICD360S-e-V/vpn/commit/213fc668fd7b8abb3fbcfceb7122aef9133350f6))
+
 ## [1.13.0](https://github.com/ICD360S-e-V/vpn/compare/v1.12.0...v1.13.0) (2026-04-12)
 
 
