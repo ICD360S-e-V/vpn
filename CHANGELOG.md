@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.14.1](https://github.com/ICD360S-e-V/vpn/compare/v1.14.0...v1.14.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove unused import and redundant null check ([18db274](https://github.com/ICD360S-e-V/vpn/commit/18db27445a70383bfdc5fc60c98b9d4723f387e3))
+
 ## [1.14.0](https://github.com/ICD360S-e-V/vpn/compare/v1.13.1...v1.14.0) (2026-04-12)
 
 
