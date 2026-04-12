@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.0](https://github.com/ICD360S-e-V/vpn/compare/v1.9.0...v1.10.0) (2026-04-12)
+
+
+### Features
+
+* add refreshConfig API method for config-without-re-enrollment ([b35ccb3](https://github.com/ICD360S-e-V/vpn/commit/b35ccb31b4a2a926542370ed660e4cd2ed98cdc6))
+* auto-refresh WG config from agent before connect ([7d616bd](https://github.com/ICD360S-e-V/vpn/commit/7d616bd8ca17a9b9567275445c2f734bd393cbe9))
+
 ## [1.9.0](https://github.com/ICD360S-e-V/vpn/compare/v1.8.2...v1.9.0) (2026-04-12)
 
 
