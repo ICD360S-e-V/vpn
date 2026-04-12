@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.5.1](https://github.com/ICD360S-e-V/vpn/compare/v1.5.0...v1.5.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* add pfctl rules + lower MTU for macOS WireGuard tunnel ([c93c853](https://github.com/ICD360S-e-V/vpn/commit/c93c85364007929eb236b989a945b90145a868e3))
+
 ## [1.5.0](https://github.com/ICD360S-e-V/vpn/compare/v1.4.6...v1.5.0) (2026-04-12)
 
 
