@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../api/api_client.dart';
+import '../../api/app_logger.dart';
+import '../../api/vpn_tunnel.dart';
 import '../../common/needs_vpn_view.dart';
 import '../../models/api_error.dart';
 import '../../models/peer.dart';
@@ -34,6 +36,18 @@ class _PeersScreenState extends State<PeersScreen> {
   }
 
   Future<void> _load() async {
+    // Check VPN status first — don't waste 10s on a timeout
+    // when we already know the tunnel is down.
+    final vpnStatus = await VpnTunnel.status();
+    if (vpnStatus != VpnTunnelStatus.connected) {
+      if (!mounted) return;
+      appLogger.info('PEERS', 'VPN deconectat — se așteaptă conexiunea');
+      setState(() {
+        _needsVpn = true;
+        _loading = false;
+      });
+      return;
+    }
     setState(() => _loading = true);
     try {
       final peers = await widget.client.listPeers();
@@ -45,6 +59,7 @@ class _PeersScreenState extends State<PeersScreen> {
       });
     } on ApiError catch (e) {
       if (!mounted) return;
+      appLogger.warn('PEERS', 'Eroare: ${e.message}');
       setState(() {
         _needsVpn = e.kind == ApiErrorKind.transport;
         _error = _needsVpn ? null : e.message;
