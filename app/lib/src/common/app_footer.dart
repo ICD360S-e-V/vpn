@@ -1,25 +1,23 @@
 // ICD360SVPN — lib/src/common/app_footer.dart
 //
-// Single-line attribution footer rendered at the bottom of every
-// screen. Reads the running app version via package_info_plus so it
-// stays in sync with pubspec.yaml after every release bump.
-//
-// The version label is tappable: it pushes ChangelogScreen which
-// shows the per-version release notes parsed from the auto-generated
-// CHANGELOG.md (M7.5).
-//
-// The check-for-updates icon next to the version (M7.8) does an
-// on-demand poll of version.json and either silently confirms
-// "up to date" via snackbar or pops the UpdateAvailableDialog so
-// the user can self-update without opening Settings.
+// Status bar footer with real-time server info: service status
+// indicators (WireGuard, AdGuard, nginx), uptime, agent info,
+// live server clock, app version + update check.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../api/api_client.dart';
+import '../api/app_logger.dart';
 import '../api/update_service.dart';
+import '../api/vpn_tunnel.dart';
+import '../app.dart';
 import '../features/about/changelog_screen.dart';
 import '../features/updates/update_available_dialog.dart';
+import '../models/health.dart';
 
 class AppFooter extends ConsumerStatefulWidget {
   const AppFooter({super.key});
@@ -31,11 +29,31 @@ class AppFooter extends ConsumerStatefulWidget {
 class _AppFooterState extends ConsumerState<AppFooter> {
   String _version = '';
   bool _checking = false;
+  Health? _health;
+  Timer? _healthTimer;
+  Timer? _clockTimer;
+  DateTime? _serverTime;
 
   @override
   void initState() {
     super.initState();
     _loadVersion();
+    _healthTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _fetchHealth(),
+    );
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) { if (mounted) setState(() {}); },
+    );
+    unawaited(_fetchHealth());
+  }
+
+  @override
+  void dispose() {
+    _healthTimer?.cancel();
+    _clockTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadVersion() async {
@@ -49,11 +67,30 @@ class _AppFooterState extends ConsumerState<AppFooter> {
     }
   }
 
+  Future<void> _fetchHealth() async {
+    final phase = ref.read(appPhaseProvider);
+    if (phase is! Connected) return;
+    final vpnStatus = await VpnTunnel.status();
+    if (vpnStatus != VpnTunnelStatus.connected) {
+      if (mounted && _health != null) setState(() => _health = null);
+      return;
+    }
+    try {
+      final h = await phase.client.health();
+      if (!mounted) return;
+      setState(() {
+        _health = h;
+        _serverTime = h.serverTime;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _health = null);
+    }
+  }
+
   void _openChangelog() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const ChangelogScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const ChangelogScreen()),
     );
   }
 
@@ -72,30 +109,83 @@ class _AppFooterState extends ConsumerState<AppFooter> {
         );
       } else {
         messenger.showSnackBar(
-          const SnackBar(
-            duration: Duration(seconds: 3),
-            content: Text('Ești pe ultima versiune.'),
-          ),
+          const SnackBar(duration: Duration(seconds: 3), content: Text('Ești pe ultima versiune.')),
         );
       }
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 4),
-          content: Text('Verificare eșuată: $e'),
-        ),
+        SnackBar(duration: const Duration(seconds: 4), content: Text('Verificare eșuată: $e')),
       );
     } finally {
       if (mounted) setState(() => _checking = false);
     }
   }
 
+  void _showServiceDetails(String title, List<String> details) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: details.map((d) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(d, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+          )).toList(),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+      ),
+    );
+  }
+
+  void _showAgentDetails() {
+    final h = _health;
+    _showServiceDetails('VPN Agent', <String>[
+      'Versiune: ${h?.agentVersion ?? "necunoscut"}',
+      'Status: ${h?.status ?? "offline"}',
+      'Uptime: ${h != null ? _formatUptime(h.uptimeSeconds) : "N/A"}',
+      'WireGuard: ${h?.wgUp == true ? "activ" : "inactiv"}',
+      'AdGuard: ${h?.adguardUp == true ? "activ" : "inactiv"}',
+      'Server: ${h?.serverTime.toLocal().toString() ?? "N/A"}',
+    ]);
+  }
+
+  String _formatUptime(int seconds) {
+    final d = seconds ~/ 86400;
+    final h = (seconds % 86400) ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (d > 0) return '${d}d ${h}h ${m}m';
+    if (h > 0) return '${h}h ${m}m';
+    return '${m}m';
+  }
+
+  String _formatClock() {
+    final t = _serverTime?.toLocal() ?? DateTime.now();
+    return '${t.hour.toString().padLeft(2, '0')}:'
+           '${t.minute.toString().padLeft(2, '0')}:'
+           '${t.second.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDate() {
+    final t = _serverTime?.toLocal() ?? DateTime.now();
+    return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final h = _health;
+    final online = h != null;
+
+    // Increment server time locally each second
+    if (_serverTime != null) {
+      _serverTime = _serverTime!.add(const Duration(seconds: 1));
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border(
@@ -104,21 +194,92 @@ class _AppFooterState extends ConsumerState<AppFooter> {
       ),
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: Text(
-              'VPN Management — ICD360S e.V.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          // Service status indicators
+          _StatusDot(
+            label: 'WG',
+            active: h?.wgUp ?? false,
+            online: online,
+            onTap: () => _showServiceDetails('WireGuard', <String>[
+              'Status: ${h?.wgUp == true ? "activ" : "inactiv"}',
+              'Interfață: wg0',
+              'Port: 443/UDP',
+              'Subnet: 10.8.0.0/24',
+            ]),
+          ),
+          const SizedBox(width: 6),
+          _StatusDot(
+            label: 'AG',
+            active: h?.adguardUp ?? false,
+            online: online,
+            onTap: () => _showServiceDetails('AdGuard Home', <String>[
+              'Status: ${h?.adguardUp == true ? "activ" : "inactiv"}',
+              'DNS: 10.8.0.1:53',
+              'Web UI: 10.8.0.1:3000',
+              'Upstream: Cloudflare DoH',
+            ]),
+          ),
+          const SizedBox(width: 8),
+
+          // Agent icon
+          InkWell(
+            onTap: online ? _showAgentDetails : null,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    Icons.dns,
+                    size: 14,
+                    color: online ? Colors.green : theme.colorScheme.outline,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    'A',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: online ? Colors.green : theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
+
+          // Uptime
+          if (online && h != null) ...<Widget>[
+            const SizedBox(width: 6),
+            Text(
+              '↑${_formatUptime(h.uptimeSeconds)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                fontSize: 10,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+
+          // Server time
+          const SizedBox(width: 8),
+          Text(
+            _serverTime != null ? '${_formatDate()} ${_formatClock()}' : '',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFamily: 'monospace',
+              fontSize: 10,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+
+          const Spacer(),
+
+          // Version + update
           if (_version.isNotEmpty)
             InkWell(
               onTap: _openChangelog,
               borderRadius: BorderRadius.circular(4),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 child: Text(
                   'v$_version',
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -130,26 +291,74 @@ class _AppFooterState extends ConsumerState<AppFooter> {
                 ),
               ),
             ),
-          const SizedBox(width: 4),
           IconButton(
             tooltip: 'Verifică actualizări',
-            iconSize: 18,
+            iconSize: 14,
             visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(
-              minWidth: 28,
-              minHeight: 28,
-            ),
+            padding: const EdgeInsets.all(2),
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             icon: _checking
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.system_update_alt),
             onPressed: _checking ? null : _checkForUpdates,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusDot extends StatelessWidget {
+  const _StatusDot({
+    required this.label,
+    required this.active,
+    required this.online,
+    this.onTap,
+  });
+  final String label;
+  final bool active;
+  final bool online;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final Color color;
+    if (!online) {
+      color = theme.colorScheme.outline;
+    } else if (active) {
+      color = Colors.green;
+    } else {
+      color = Colors.red;
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 10,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
