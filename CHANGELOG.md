@@ -19,6 +19,20 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.2.6](https://github.com/ICD360S-e-V/vpn/compare/v1.2.5...v1.2.6) (2026-04-12)
+
+
+### Bug Fixes
+
+* **ci:** pin ossf/scorecard-action to v2.4.3 ([af2a080](https://github.com/ICD360S-e-V/vpn/commit/af2a080ff61a4b56df06fb90d93363d23304586b))
+* **ci:** use PAT for release-please to bypass enterprise PR restriction ([78ac673](https://github.com/ICD360S-e-V/vpn/commit/78ac673bdb80f11f5e76ce54c7a6825622463f9c))
+* invoke wg-quick with Homebrew bash on macOS to avoid bash 3.2 shebang ([ee04a12](https://github.com/ICD360S-e-V/vpn/commit/ee04a12e7f2893d16253702e525a201502a73571))
+
+
+### Documentation
+
+* scrub literal credential string from M7.10 changelog entry ([2e6192c](https://github.com/ICD360S-e-V/vpn/commit/2e6192c82dbc65f4eb1f234cc05f0a6ece56df73))
+
 ## [Unreleased]
 
 ### Changed — repo cleanup for public release (M7.10)
