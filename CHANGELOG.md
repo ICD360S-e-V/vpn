@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.4.2](https://github.com/ICD360S-e-V/vpn/compare/v1.4.1...v1.4.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* use curl for IP detection, fix DNS parsing from scutil ([740135b](https://github.com/ICD360S-e-V/vpn/commit/740135b5d000ca552302cfa3507fe118f3e1233e))
+
 ## [1.4.1](https://github.com/ICD360S-e-V/vpn/compare/v1.4.0...v1.4.1) (2026-04-12)
 
 
