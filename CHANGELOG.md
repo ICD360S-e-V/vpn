@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.1](https://github.com/ICD360S-e-V/vpn/compare/v1.10.0...v1.10.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* disable macOS firewall during VPN session (Sequoia bug) ([be99199](https://github.com/ICD360S-e-V/vpn/commit/be991996bca53ec5e932843bd4049386ada7babb))
+
 ## [1.10.0](https://github.com/ICD360S-e-V/vpn/compare/v1.9.0...v1.10.0) (2026-04-12)
 
 
