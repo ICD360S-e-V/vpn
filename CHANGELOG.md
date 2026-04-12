@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.4](https://github.com/ICD360S-e-V/vpn/compare/v1.10.3...v1.10.4) (2026-04-12)
+
+
+### Bug Fixes
+
+* single admin prompt, remove networksetup leak protection ([6cbebb9](https://github.com/ICD360S-e-V/vpn/commit/6cbebb9586d30bb11c1fbf7fc055096d609f9141))
+
 ## [1.10.3](https://github.com/ICD360S-e-V/vpn/compare/v1.10.2...v1.10.3) (2026-04-12)
 
 
