@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.11.1](https://github.com/ICD360S-e-V/vpn/compare/v1.11.0...v1.11.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove unused _confirmDialog and _showProgressSnack ([c40c806](https://github.com/ICD360S-e-V/vpn/commit/c40c80690699f3875904d16e3f8c5c6fbbfd5127))
+
 ## [1.11.0](https://github.com/ICD360S-e-V/vpn/compare/v1.10.10...v1.11.0) (2026-04-12)
 
 
