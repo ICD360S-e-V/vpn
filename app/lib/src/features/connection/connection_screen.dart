@@ -216,7 +216,14 @@ class _IpDetail extends StatelessWidget {
               child: Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
             ),
             const SizedBox(width: 8),
-            Expanded(child: _CopyableText(text: isEmpty ? 'nedisponibil' : ipInfo.ip)),
+            Expanded(child: Text(
+              isEmpty ? (label == 'IPv6' ? 'blocat' : 'indisponibil') : ipInfo.ip,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: isEmpty ? FontWeight.normal : FontWeight.w500,
+                color: isEmpty ? theme.colorScheme.outline : null,
+              ),
+            )),
             if (badge != null) ...<Widget>[
               const SizedBox(width: 8),
               Text(badge!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeColor ?? Colors.green.shade700)),
