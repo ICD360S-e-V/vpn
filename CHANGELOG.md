@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.3](https://github.com/ICD360S-e-V/vpn/compare/v1.10.2...v1.10.3) (2026-04-12)
+
+
+### Bug Fixes
+
+* use pfctl -f instead of -Ef to avoid enabling pf block-all ([1fcb590](https://github.com/ICD360S-e-V/vpn/commit/1fcb59043cf19fd336bca0ec2cbb5166579caa69))
+
 ## [1.10.2](https://github.com/ICD360S-e-V/vpn/compare/v1.10.1...v1.10.2) (2026-04-12)
 
 
