@@ -65,10 +65,14 @@ Future<SecurityContext> _buildAppleContext(
     await certFile.writeAsString(certPem);
     await keyFile.writeAsString(keyPem);
 
-    // Convert PEM → PKCS12 with empty password.
-    // openssl pkcs12 -export -in cert.pem -inkey key.pem -out client.p12 -passout pass:
+    // Convert PEM → PKCS12 with empty password using LEGACY algorithms.
+    // OpenSSL 3.x defaults to AES-256-CBC which macOS Secure Transport
+    // cannot read. The -legacy flag forces SHA1 + TripleDES which is
+    // the only format SecPKCS12Import accepts.
+    // See: https://github.com/openssl/openssl/issues/19871
     final result = await Process.run('/usr/bin/openssl', <String>[
       'pkcs12', '-export',
+      '-legacy',
       '-in', certFile.path,
       '-inkey', keyFile.path,
       '-out', p12File.path,
