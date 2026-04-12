@@ -215,8 +215,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      PeersScreen(client: widget.client),
       const ConnectionScreen(),
+      PeersScreen(client: widget.client),
       HealthScreen(client: widget.client),
       const SettingsScreen(),
     ];
@@ -288,14 +288,14 @@ class _MainShellState extends ConsumerState<MainShell> {
                   labelType: NavigationRailLabelType.none,
                   destinations: const <NavigationRailDestination>[
                     NavigationRailDestination(
+                      icon: Icon(Icons.shield_outlined),
+                      selectedIcon: Icon(Icons.shield),
+                      label: Text('Status'),
+                    ),
+                    NavigationRailDestination(
                       icon: Icon(Icons.people_outline),
                       selectedIcon: Icon(Icons.people),
                       label: Text('Peers'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.shield_outlined),
-                      selectedIcon: Icon(Icons.shield),
-                      label: Text('Conexiune'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.favorite_outline),
