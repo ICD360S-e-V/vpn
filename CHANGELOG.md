@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.5.3](https://github.com/ICD360S-e-V/vpn/compare/v1.5.2...v1.5.3) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove PostUp/PostDown from client config — breaks wg-quick ([aa836ef](https://github.com/ICD360S-e-V/vpn/commit/aa836ef674f2ea5bc5840e1d96cedfd96c49570c))
+
 ## [1.5.2](https://github.com/ICD360S-e-V/vpn/compare/v1.5.1...v1.5.2) (2026-04-12)
 
 
