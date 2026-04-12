@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.16.0](https://github.com/ICD360S-e-V/vpn/compare/v1.15.0...v1.16.0) (2026-04-12)
+
+
+### Features
+
+* add bandwidth traffic chart screen ([2be3793](https://github.com/ICD360S-e-V/vpn/commit/2be3793b25faf28f6e40f087baaac196da4dc78f))
+* add Trafic tab with bandwidth chart ([5b7bcfb](https://github.com/ICD360S-e-V/vpn/commit/5b7bcfb420f8217016c61bc55b60edd7ac75569d))
+
 ## [1.15.0](https://github.com/ICD360S-e-V/vpn/compare/v1.14.4...v1.15.0) (2026-04-12)
 
 
