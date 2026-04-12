@@ -3,10 +3,9 @@
 // Lightweight connection diagnostics — public IP detection, DNS
 // server discovery, and leak checks.
 //
-// Uses plain dart:io HttpClient (not the mTLS Dio instance) so
-// it works regardless of whether the agent is reachable.
+// Uses Process.run with curl/scutil instead of dart:io HttpClient
+// because macOS blocks direct network access from unsigned apps.
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'app_logger.dart';
@@ -20,42 +19,26 @@ class ConnectionInfo {
     required this.isVpnActive,
   });
 
-  /// Public IPv4 address (or 'nu' / 'eroare').
   final String publicIpv4;
-
-  /// Public IPv6 address (or 'nu' if no IPv6 connectivity).
   final String publicIpv6;
-
-  /// IPv4 DNS servers the OS is configured to use.
   final List<String> dnsServersV4;
-
-  /// IPv6 DNS servers the OS is configured to use.
   final List<String> dnsServersV6;
-
-  /// Whether the VPN tunnel appears to be active.
   final bool isVpnActive;
 
-  /// All DNS servers combined.
   List<String> get allDnsServers => [...dnsServersV4, ...dnsServersV6];
 
-  /// DNS is safe when ALL resolvers point to the VPN DNS (10.8.0.1).
   bool get isDnsSafe =>
       allDnsServers.isNotEmpty &&
       allDnsServers.every((s) => s == '10.8.0.1');
 
-  /// True if a public IPv6 address was detected.
   bool get hasIpv6 => publicIpv6 != 'nu' && publicIpv6 != 'eroare';
 
-  /// IPv6 is leaking if we detect a public IPv6 while the VPN is up.
   bool get isIpv6Leaking => isVpnActive && hasIpv6;
 
-  /// Overall protection score.
   bool get isFullyProtected => isVpnActive && isDnsSafe && !isIpv6Leaking;
 }
 
 class ConnectionCheck {
-  static const _timeout = Duration(seconds: 8);
-
   /// Run all checks and return a snapshot.
   static Future<ConnectionInfo> run({required bool vpnActive}) async {
     appLogger.info('CHECK', 'Pornire verificare conexiune…');
@@ -94,48 +77,43 @@ class ConnectionCheck {
     return info;
   }
 
-  /// Detect public IPv4 via ipify (IPv4-only endpoint).
+  /// Detect public IPv4 via curl to ipify (IPv4-only endpoint).
+  /// Uses curl because dart:io HttpClient is blocked on unsigned macOS apps.
   static Future<String> _detectIpv4() async {
     try {
-      final client = HttpClient()..connectionTimeout = _timeout;
-      final req = await client.getUrl(
-        Uri.parse('https://api.ipify.org?format=json'),
-      );
-      final resp = await req.close().timeout(_timeout);
-      final body = await resp.transform(utf8.decoder).join();
-      client.close(force: true);
-      final json = jsonDecode(body) as Map<String, dynamic>;
-      return (json['ip'] as String?) ?? 'necunoscut';
+      final result = await Process.run('/usr/bin/curl', <String>[
+        '-s', '--connect-timeout', '8', '--max-time', '10',
+        '-4', 'https://api.ipify.org',
+      ]).timeout(const Duration(seconds: 12));
+      if (result.exitCode != 0) {
+        appLogger.error('CHECK', 'curl IPv4 exit ${result.exitCode}');
+        return 'eroare';
+      }
+      final ip = (result.stdout as String).trim();
+      return ip.isNotEmpty ? ip : 'necunoscut';
     } catch (e) {
       appLogger.error('CHECK', 'Nu am putut detecta IPv4: $e');
       return 'eroare';
     }
   }
 
-  /// Detect public IPv6 via ipify IPv6-only endpoint.
-  /// Returns the IPv6 address or 'nu' if no IPv6 connectivity.
+  /// Detect public IPv6 via curl to ipify IPv6-only endpoint.
   static Future<String> _detectIpv6() async {
     try {
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 4);
-      final req = await client.getUrl(
-        Uri.parse('https://api6.ipify.org?format=json'),
-      );
-      final resp = await req.close().timeout(const Duration(seconds: 5));
-      final body = await resp.transform(utf8.decoder).join();
-      client.close(force: true);
-      final json = jsonDecode(body) as Map<String, dynamic>;
-      final ip = (json['ip'] as String?) ?? '';
+      final result = await Process.run('/usr/bin/curl', <String>[
+        '-s', '--connect-timeout', '4', '--max-time', '6',
+        '-6', 'https://api6.ipify.org',
+      ]).timeout(const Duration(seconds: 8));
+      if (result.exitCode != 0) return 'nu';
+      final ip = (result.stdout as String).trim();
       if (ip.isNotEmpty && ip.contains(':')) return ip;
       return 'nu';
     } catch (_) {
-      // Timeout or failure = no IPv6 connectivity.
       return 'nu';
     }
   }
 
-  /// Read DNS servers from networksetup (macOS) or resolv.conf (Linux).
-  /// Returns (ipv4_servers, ipv6_servers).
+  /// Detect DNS servers. Returns (ipv4_servers, ipv6_servers).
   static Future<(List<String>, List<String>)> _detectDnsServers() async {
     try {
       if (Platform.isMacOS) {
@@ -153,76 +131,41 @@ class ConnectionCheck {
     }
   }
 
-  /// Use `networksetup -getdnsservers` which returns the actual
-  /// configured DNS servers per network service. Much more reliable
-  /// than parsing scutil --dns which includes resolver chains,
-  /// link-local addresses, and interface suffixes.
+  /// Parse ALL nameservers from scutil --dns. This is the reliable
+  /// way to see what macOS is actually using for DNS resolution,
+  /// including DHCP-assigned servers. networksetup -getdnsservers
+  /// only shows manually configured ones.
   static Future<(List<String>, List<String>)> _detectDnsMacOS() async {
+    final result = await Process.run('/usr/sbin/scutil', <String>['--dns']);
+    if (result.exitCode != 0) return (<String>['eroare scutil'], <String>[]);
+
+    final lines = (result.stdout as String).split('\n');
     final v4 = <String>{};
     final v6 = <String>{};
-    const services = <String>['Wi-Fi', 'Ethernet', 'USB 10/100/1000 LAN'];
 
-    for (final svc in services) {
-      try {
-        final result = await Process.run(
-          '/usr/sbin/networksetup',
-          <String>['-getdnsservers', svc],
-        );
-        if (result.exitCode != 0) continue;
-        final output = (result.stdout as String).trim();
-        // networksetup returns "There aren't any DNS Servers set on ..."
-        // when DHCP is managing DNS. Otherwise one IP per line.
-        if (output.contains("aren't any")) continue;
-        for (final line in output.split('\n')) {
-          final ip = line.trim();
-          if (ip.isEmpty) continue;
-          if (ip.contains(':')) {
-            v6.add(ip);
-          } else {
-            v4.add(ip);
-          }
-        }
-      } catch (_) {
-        continue;
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (!trimmed.startsWith('nameserver[')) continue;
+
+      // Format: "nameserver[0] : 10.8.0.1" or "nameserver[0] : 2001:db8::1"
+      final colonIdx = trimmed.indexOf(' : ');
+      if (colonIdx < 0) continue;
+      final ip = trimmed.substring(colonIdx + 3).trim();
+      if (ip.isEmpty) continue;
+
+      // Skip link-local IPv6 (fe80::) and interface-suffixed (%en0)
+      if (ip.contains('%')) continue;
+      if (ip.toLowerCase().startsWith('fe80:')) continue;
+
+      if (ip.contains(':')) {
+        v6.add(ip);
+      } else {
+        v4.add(ip);
       }
     }
 
-    // If no explicit DNS servers are set, check what the system is
-    // actually using via scutil --dns (first resolver's nameservers).
     if (v4.isEmpty && v6.isEmpty) {
-      try {
-        final result =
-            await Process.run('/usr/sbin/scutil', <String>['--dns']);
-        if (result.exitCode == 0) {
-          final lines = (result.stdout as String).split('\n');
-          bool inFirstResolver = false;
-          for (final line in lines) {
-            final trimmed = line.trim();
-            if (trimmed.startsWith('resolver #1')) {
-              inFirstResolver = true;
-              continue;
-            }
-            if (inFirstResolver && trimmed.startsWith('resolver #')) break;
-            if (inFirstResolver && trimmed.startsWith('nameserver[')) {
-              final colonIdx = trimmed.indexOf(':');
-              if (colonIdx < 0) continue;
-              final ip = trimmed.substring(colonIdx + 1).trim();
-              // Skip link-local IPv6 and interface-suffixed addresses.
-              if (ip.contains('%')) continue;
-              if (ip.startsWith('fe80:')) continue;
-              if (ip.contains(':')) {
-                v6.add(ip);
-              } else {
-                v4.add(ip);
-              }
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (v4.isEmpty && v6.isEmpty) {
-      return (<String>['DHCP (automat)'], <String>[]);
+      return (<String>['nu s-au detectat'], <String>[]);
     }
     return (v4.toList(), v6.toList());
   }
