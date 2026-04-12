@@ -246,6 +246,68 @@ class VpnTunnel {
       if (ifResult.exitCode == 0) {
         appLogger.info('NET', 'Interfețe: ${(ifResult.stdout as String).trim()}');
       }
+
+      // Ping test: can we reach the VPN gateway?
+      final pingResult = await Process.run(
+        '/sbin/ping', <String>['-c', '2', '-W', '3', '10.8.0.1'],
+      ).timeout(const Duration(seconds: 8), onTimeout: () =>
+        ProcessResult(0, 1, '', 'timeout'));
+      if (pingResult.exitCode == 0) {
+        appLogger.info('PING', '10.8.0.1 — OK: ${(pingResult.stdout as String).trim().split('\n').last}');
+      } else {
+        appLogger.error('PING', '10.8.0.1 — EȘUAT (exit ${pingResult.exitCode})');
+      }
+
+      // Check if wireguard-go process is running
+      final psResult = await Process.run(
+        '/bin/ps', <String>['-ax', '-o', 'pid,comm'],
+      );
+      if (psResult.exitCode == 0) {
+        final lines = (psResult.stdout as String).split('\n');
+        final wgProcs = lines.where((l) => l.contains('wireguard-go')).toList();
+        if (wgProcs.isNotEmpty) {
+          appLogger.info('PROC', 'wireguard-go: ${wgProcs.map((l) => l.trim()).join(", ")}');
+        } else {
+          appLogger.error('PROC', 'wireguard-go NU rulează!');
+        }
+      }
+
+      // Check macOS firewall status
+      final fwResult = await Process.run(
+        '/usr/libexec/ApplicationFirewall/socketfilterfw',
+        <String>['--getglobalstate'],
+      );
+      if (fwResult.exitCode == 0) {
+        appLogger.info('FW', (fwResult.stdout as String).trim());
+      }
+
+      // Check utun4 interface details
+      final utunResult = await Process.run(
+        '/sbin/ifconfig', <String>['utun4'],
+      );
+      if (utunResult.exitCode == 0) {
+        final lines = (utunResult.stdout as String).split('\n');
+        for (final line in lines) {
+          final t = line.trim();
+          if (t.contains('inet') || t.contains('mtu') || t.contains('flags')) {
+            appLogger.info('UTUN', t);
+          }
+        }
+      }
+
+      // Check pf firewall state
+      final pfResult = await Process.run(
+        '/sbin/pfctl', <String>['-s', 'info'],
+      );
+      appLogger.info('PF', 'pfctl status: exit ${pfResult.exitCode}');
+      if (pfResult.exitCode == 0) {
+        final lines = (pfResult.stdout as String).split('\n');
+        for (final line in lines) {
+          if (line.contains('Status:') || line.contains('Enabled') || line.contains('Disabled')) {
+            appLogger.info('PF', line.trim());
+          }
+        }
+      }
     } catch (e) {
       appLogger.warn('DIAG', 'Diagnostice eșuate: $e');
     }
