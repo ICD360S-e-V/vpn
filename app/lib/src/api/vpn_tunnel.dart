@@ -165,39 +165,23 @@ class VpnTunnel {
 
     appLogger.info('VPN', 'Pornire tunel WireGuard…');
     if (Platform.isMacOS) {
-      // Firewall: allow wireguard-go in Application Firewall +
-      // add pf anchor rules to explicitly pass traffic on utun.
-      // Uses pfctl anchors (com.apple/wireguard) instead of
-      // disabling the firewall — keeps the Mac protected while
-      // allowing VPN traffic. Token is saved for cleanup.
-      try {
-        final fwCmds = _macosFirewallSetup();
-        await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', fwCmds],
-        );
-        appLogger.info('FW', 'pf anchor + socketfilterfw configurat');
-      } catch (e) {
-        appLogger.warn('FW', 'Nu am putut configura firewall: $e');
-      }
-
-      // Leak protection: disable IPv6 + force DNS through VPN.
-      // All commands run in the same admin session as wg-quick up
-      // for reliable system-wide DNS and IPv6 leak prevention.
-      final leakFixUp = _macosLeakProtectionUp();
-      await _runWithMacosAdmin(<String>[wgQuick, 'up', confPath]);
+      // Single admin prompt: firewall setup + wg-quick up.
+      // Combined into one shell command to avoid multiple password
+      // prompts which annoy the user and cause timing issues.
+      final fwCmds = _macosFirewallSetup();
+      final modernBash = await _findModernBash();
+      final wgCmd = modernBash != null
+          ? '$modernBash ${_shellEscape(wgQuick)} up ${_shellEscape(confPath)}'
+          : '${_shellEscape(wgQuick)} up ${_shellEscape(confPath)}';
+      final combined = '$fwCmds && $wgCmd';
+      await _runWithMacosAdmin(<String>['/bin/sh', '-c', combined]);
+      appLogger.info('FW', 'pf anchor + socketfilterfw configurat');
       appLogger.info('VPN', 'wg-quick up reușit');
-      // DNS + IPv6 leak protection IMMEDIATELY after tunnel is up,
-      // BEFORE any other network calls. Otherwise the app and system
-      // use the old DNS which doesn't route through the tunnel.
-      try {
-        await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', leakFixUp],
-        );
-        appLogger.info('DNS', 'DNS forțat la 10.8.0.1, IPv6 dezactivat');
-      } catch (e) {
-        appLogger.warn('DNS', 'Nu am putut aplica leak protection: $e');
-      }
-      // Diagnostics AFTER DNS is set so they test the real config.
+      // DNS is already set by wg-quick from the config's DNS = 10.8.0.1
+      // IPv6 is already handled by AllowedIPs ::/1, 8000::/1
+      // DO NOT run networksetup commands — they reset the physical
+      // interface (en0/Wi-Fi) and kill the WireGuard UDP session.
+      appLogger.info('DNS', 'DNS setat de wg-quick la 10.8.0.1');
       await _logMacosDiagnostics();
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'up', confPath]);
@@ -410,28 +394,16 @@ class VpnTunnel {
     }
     appLogger.info('VPN', 'Oprire tunel WireGuard…');
     if (Platform.isMacOS) {
-      await _runWithMacosAdmin(<String>[wgQuick, 'down', confPath]);
+      // Single admin prompt: wg-quick down + pf cleanup.
+      final fwCleanup = _macosFirewallCleanup();
+      final modernBash = await _findModernBash();
+      final wgCmd = modernBash != null
+          ? '$modernBash ${_shellEscape(wgQuick)} down ${_shellEscape(confPath)}'
+          : '${_shellEscape(wgQuick)} down ${_shellEscape(confPath)}';
+      final combined = '$wgCmd; $fwCleanup';
+      await _runWithMacosAdmin(<String>['/bin/sh', '-c', combined]);
       appLogger.info('VPN', 'wg-quick down reușit');
-      // Restore DNS and IPv6 after tunnel goes down.
-      try {
-        final leakFixDown = _macosLeakProtectionDown();
-        await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', leakFixDown],
-        );
-        appLogger.info('DNS', 'DNS restaurat la DHCP, IPv6 reactivat');
-      } catch (e) {
-        appLogger.warn('DNS', 'Nu am putut restaura DNS/IPv6: $e');
-      }
-      // Cleanup pf anchor rules
-      try {
-        final fwCleanup = _macosFirewallCleanup();
-        await _runWithMacosAdmin(
-          <String>['/bin/sh', '-c', fwCleanup],
-        );
-        appLogger.info('FW', 'pf anchor reguli șterse');
-      } catch (e) {
-        appLogger.warn('FW', 'Nu am putut curăța pf rules: $e');
-      }
+      appLogger.info('FW', 'pf anchor reguli șterse');
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'down', confPath]);
       appLogger.info('VPN', 'wg-quick down reușit');
