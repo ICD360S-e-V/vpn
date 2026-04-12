@@ -483,8 +483,24 @@ func renderClientConfig(in clientConfigInput) string {
 	fmt.Fprintln(&b, "PrivateKey =", in.ClientPrivateKey)
 	fmt.Fprintln(&b, "Address    =", in.ClientAddress)
 	fmt.Fprintln(&b, "DNS        =", in.DNS)
-	fmt.Fprintln(&b, "MTU        =", in.MTU)
+	// MTU 1280 is safe for any path including cellular/hotspot.
+	// Higher values cause silent packet drops on iPhone tethering
+	// and other constrained links.
+	fmt.Fprintln(&b, "MTU        = 1280")
 	fmt.Fprintln(&b)
+
+	// PostUp/PostDown: configure macOS packet filter (pf) to allow
+	// and NAT traffic on the utun interface. Without this, macOS
+	// silently blocks outgoing traffic on the WireGuard tunnel.
+	// Uses the com.wireguard anchor so rules are scoped and cleaned
+	// up on disconnect.
+	fmt.Fprintln(&b, `PostUp = /sbin/pfctl -a com.wireguard -f - <<'PF'`)
+	fmt.Fprintln(&b, `pass out on utun quick`)
+	fmt.Fprintln(&b, `pass in on utun quick`)
+	fmt.Fprintln(&b, `PF`)
+	fmt.Fprintln(&b, `PostDown = /sbin/pfctl -a com.wireguard -F all 2>/dev/null || true`)
+	fmt.Fprintln(&b)
+
 	fmt.Fprintln(&b, "[Peer]")
 	fmt.Fprintln(&b, "PublicKey           =", in.ServerPublicKey)
 	fmt.Fprintln(&b, "PresharedKey        =", in.PresharedKey)
