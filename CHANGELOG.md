@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.8.2](https://github.com/ICD360S-e-V/vpn/compare/v1.8.1...v1.8.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove unused variable to fix flutter analyze ([a4479a2](https://github.com/ICD360S-e-V/vpn/commit/a4479a211054284acab27a4c8fc83060d354839c))
+
 ## [1.8.1](https://github.com/ICD360S-e-V/vpn/compare/v1.8.0...v1.8.1) (2026-04-12)
 
 
