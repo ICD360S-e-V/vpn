@@ -19,6 +19,16 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.3.1](https://github.com/ICD360S-e-V/vpn/compare/v1.3.0...v1.3.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* **ci:** add pull-request-title-pattern to fix component mismatch ([628c7fc](https://github.com/ICD360S-e-V/vpn/commit/628c7fcf510cf96690f19a306f2f38ca8db17ccc))
+* **ci:** remove package-name, set empty component to stop mismatch ([e99ce2d](https://github.com/ICD360S-e-V/vpn/commit/e99ce2d4af2a8ed9b995b876157a432daddcbc49))
+* **ci:** replace deprecated manifest-pr with release-pr ([65418b0](https://github.com/ICD360S-e-V/vpn/commit/65418b0236b08f476c45d4ea216fe7e429ceb6e2))
+* **ci:** tolerate duplicate release tag in github-release step ([b8b4c9a](https://github.com/ICD360S-e-V/vpn/commit/b8b4c9a7d60e9e99b5b4ec4602bd1cd2c74ed1d7))
+
 ## [1.2.6](https://github.com/ICD360S-e-V/vpn/compare/v1.2.5...v1.2.6) (2026-04-12)
 
 
