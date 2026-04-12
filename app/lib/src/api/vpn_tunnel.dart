@@ -450,17 +450,13 @@ class VpnTunnel {
   ///    WireGuard traffic — no need to disable the firewall.
   static String _macosFirewallSetup() {
     const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
-    const tokenFile = '/var/run/wireguard/pf_token.txt';
     const anchor = 'com.apple/wireguard';
     const candidates = <String>[
       '/opt/homebrew/bin/wireguard-go',
       '/usr/local/bin/wireguard-go',
       '/opt/local/bin/wireguard-go',
     ];
-    final cmds = <String>[
-      // Create token directory
-      'mkdir -p /var/run/wireguard',
-    ];
+    final cmds = <String>[];
     // Allow wireguard-go in Application Firewall
     for (final path in candidates) {
       cmds.add('$sfw --add $path 2>/dev/null || true');
@@ -471,25 +467,19 @@ class VpnTunnel {
     // Token is saved for clean removal at disconnect.
     cmds.add(
       "echo 'pass quick on utun all' "
-      "| pfctl -a $anchor -Ef - 2>&1 "
-      "| grep 'Token' "
-      "| sed 's/Token : //' > $tokenFile "
-      "|| true",
+      // Use -f (load rules) NOT -Ef (enable pf + load).
+      // -E enables the macOS packet filter which has a default
+      // block-all policy — that kills WireGuard's own encrypted
+      // UDP packets on en0 before they reach the server.
+      "| pfctl -a $anchor -f - 2>/dev/null || true",
     );
     return cmds.join(' && ');
   }
 
-  /// Cleanup pf anchor rules and release the token.
+  /// Cleanup pf anchor rules.
   static String _macosFirewallCleanup() {
-    const tokenFile = '/var/run/wireguard/pf_token.txt';
     const anchor = 'com.apple/wireguard';
-    return [
-      // Flush anchor rules
-      'pfctl -a $anchor -F all 2>/dev/null || true',
-      // Release pf token (decreases reference count)
-      'test -f $tokenFile && pfctl -X \$(cat $tokenFile) 2>/dev/null || true',
-      'rm -f $tokenFile',
-    ].join(' && ');
+    return 'pfctl -a $anchor -F all 2>/dev/null || true';
   }
 
   ///   - Force DNS to VPN's AdGuard Home (10.8.0.1)
