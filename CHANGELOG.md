@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.14.4](https://github.com/ICD360S-e-V/vpn/compare/v1.14.3...v1.14.4) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove orphan catch block breaking class syntax ([cfabe59](https://github.com/ICD360S-e-V/vpn/commit/cfabe59f41625233d497ce01a21ec93f0240c821))
+
 ## [1.14.3](https://github.com/ICD360S-e-V/vpn/compare/v1.14.2...v1.14.3) (2026-04-12)
 
 
