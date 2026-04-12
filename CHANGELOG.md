@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.9.0](https://github.com/ICD360S-e-V/vpn/compare/v1.8.2...v1.9.0) (2026-04-12)
+
+
+### Features
+
+* add POST /v1/config/refresh endpoint ([ecfde1a](https://github.com/ICD360S-e-V/vpn/commit/ecfde1a66a311ee49cafc84992397126db38842b))
+* add RefreshConfig method for config-without-re-enrollment ([4d1c90a](https://github.com/ICD360S-e-V/vpn/commit/4d1c90ae03cab25d984a966b2cb5278cee151047))
+* register POST /v1/config/refresh route ([a119278](https://github.com/ICD360S-e-V/vpn/commit/a119278cfb90fc15c5a1082330be77bd9cd6a502))
+
 ## [1.8.2](https://github.com/ICD360S-e-V/vpn/compare/v1.8.1...v1.8.2) (2026-04-12)
 
 
