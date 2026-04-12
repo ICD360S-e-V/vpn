@@ -1,26 +1,43 @@
 // ICD360SVPN — lib/src/api/connection_check.dart
 //
 // Lightweight connection diagnostics — public IP detection, DNS
-// server discovery, and leak checks.
+// server discovery, ISP/hostname lookup, and leak checks.
 //
 // Uses Process.run with curl/scutil instead of dart:io HttpClient
 // because macOS blocks direct network access from unsigned apps.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'app_logger.dart';
 
+/// Information about a public IP address.
+class IpInfo {
+  const IpInfo({
+    required this.ip,
+    this.isp = '',
+    this.hostname = '',
+    this.country = '',
+  });
+  final String ip;
+  final String isp;
+  final String hostname;
+  final String country;
+
+  bool get isEmpty => ip == 'nu' || ip == 'eroare' || ip.isEmpty;
+}
+
 class ConnectionInfo {
   const ConnectionInfo({
-    required this.publicIpv4,
-    required this.publicIpv6,
+    required this.ipv4,
+    required this.ipv6,
     required this.dnsServersV4,
     required this.dnsServersV6,
     required this.isVpnActive,
   });
 
-  final String publicIpv4;
-  final String publicIpv6;
+  final IpInfo ipv4;
+  final IpInfo ipv6;
   final List<String> dnsServersV4;
   final List<String> dnsServersV6;
   final bool isVpnActive;
@@ -31,7 +48,7 @@ class ConnectionInfo {
       allDnsServers.isNotEmpty &&
       allDnsServers.every((s) => s == '10.8.0.1');
 
-  bool get hasIpv6 => publicIpv6 != 'nu' && publicIpv6 != 'eroare';
+  bool get hasIpv6 => !ipv6.isEmpty;
 
   bool get isIpv6Leaking => isVpnActive && hasIpv6;
 
@@ -42,25 +59,31 @@ class ConnectionCheck {
   /// Run all checks and return a snapshot.
   static Future<ConnectionInfo> run({required bool vpnActive}) async {
     appLogger.info('CHECK', 'Pornire verificare conexiune…');
+
+    // Phase 1: detect IPs and DNS in parallel
     final results = await Future.wait(<Future<dynamic>>[
-      _detectIpv4(),
-      _detectIpv6(),
+      _detectIpWithInfo(ipv6: false),
+      _detectIpWithInfo(ipv6: true),
       _detectDnsServers(),
     ]);
-    final ipv4 = results[0] as String;
-    final ipv6 = results[1] as String;
+    final ipv4 = results[0] as IpInfo;
+    final ipv6 = results[1] as IpInfo;
     final dns = results[2] as (List<String>, List<String>);
 
     final info = ConnectionInfo(
-      publicIpv4: ipv4,
-      publicIpv6: ipv6,
+      ipv4: ipv4,
+      ipv6: ipv6,
       dnsServersV4: dns.$1,
       dnsServersV6: dns.$2,
       isVpnActive: vpnActive,
     );
 
-    appLogger.info('CHECK', 'IPv4: $ipv4');
-    appLogger.info('CHECK', 'IPv6: $ipv6');
+    appLogger.info('CHECK', 'IPv4: ${ipv4.ip} (${ipv4.isp})');
+    if (!ipv6.isEmpty) {
+      appLogger.info('CHECK', 'IPv6: ${ipv6.ip} (${ipv6.isp})');
+    } else {
+      appLogger.info('CHECK', 'IPv6: nedisponibil');
+    }
     appLogger.info('CHECK', 'DNS v4: ${dns.$1.join(", ")}');
     if (dns.$2.isNotEmpty) {
       appLogger.info('CHECK', 'DNS v6: ${dns.$2.join(", ")}');
@@ -71,45 +94,65 @@ class ConnectionCheck {
       appLogger.warn('CHECK', 'DNS LEAK — servere externe detectate!');
     }
     if (info.isIpv6Leaking) {
-      appLogger.warn('CHECK', 'IPv6 LEAK — $ipv6');
+      appLogger.warn('CHECK', 'IPv6 LEAK — ${ipv6.ip}');
     }
 
     return info;
   }
 
-  /// Detect public IPv4 via curl to ipify (IPv4-only endpoint).
-  /// Uses curl because dart:io HttpClient is blocked on unsigned macOS apps.
-  static Future<String> _detectIpv4() async {
+  /// Detect public IP and look up ISP/hostname via ipinfo.io.
+  static Future<IpInfo> _detectIpWithInfo({required bool ipv6}) async {
+    final flag = ipv6 ? '-6' : '-4';
+    final endpoint = ipv6 ? 'https://api6.ipify.org' : 'https://api.ipify.org';
+    final timeout = ipv6 ? '4' : '8';
+
     try {
-      final result = await Process.run('/usr/bin/curl', <String>[
-        '-s', '--connect-timeout', '8', '--max-time', '10',
-        '-4', 'https://api.ipify.org',
+      // Step 1: get IP
+      final ipResult = await Process.run('/usr/bin/curl', <String>[
+        '-s', '--connect-timeout', timeout, '--max-time', '10',
+        flag, endpoint,
       ]).timeout(const Duration(seconds: 12));
-      if (result.exitCode != 0) {
-        appLogger.error('CHECK', 'curl IPv4 exit ${result.exitCode}');
-        return 'eroare';
+      if (ipResult.exitCode != 0) {
+        if (ipv6) return const IpInfo(ip: 'nu');
+        appLogger.error('CHECK', 'curl IPv4 exit ${ipResult.exitCode}');
+        return const IpInfo(ip: 'eroare');
       }
-      final ip = (result.stdout as String).trim();
-      return ip.isNotEmpty ? ip : 'necunoscut';
+      final ip = (ipResult.stdout as String).trim();
+      if (ip.isEmpty) {
+        return IpInfo(ip: ipv6 ? 'nu' : 'eroare');
+      }
+      if (ipv6 && !ip.contains(':')) return const IpInfo(ip: 'nu');
+
+      // Step 2: lookup ISP + hostname via ipinfo.io
+      final info = await _lookupIpInfo(ip);
+      return info;
     } catch (e) {
-      appLogger.error('CHECK', 'Nu am putut detecta IPv4: $e');
-      return 'eroare';
+      if (!ipv6) appLogger.error('CHECK', 'Nu am putut detecta IPv4: $e');
+      return IpInfo(ip: ipv6 ? 'nu' : 'eroare');
     }
   }
 
-  /// Detect public IPv6 via curl to ipify IPv6-only endpoint.
-  static Future<String> _detectIpv6() async {
+  /// Query ipinfo.io for ISP, hostname, and country.
+  static Future<IpInfo> _lookupIpInfo(String ip) async {
     try {
       final result = await Process.run('/usr/bin/curl', <String>[
         '-s', '--connect-timeout', '4', '--max-time', '6',
-        '-6', 'https://api6.ipify.org',
+        'https://ipinfo.io/$ip/json',
       ]).timeout(const Duration(seconds: 8));
-      if (result.exitCode != 0) return 'nu';
-      final ip = (result.stdout as String).trim();
-      if (ip.isNotEmpty && ip.contains(':')) return ip;
-      return 'nu';
+      if (result.exitCode != 0) return IpInfo(ip: ip);
+
+      final body = (result.stdout as String).trim();
+      if (body.isEmpty) return IpInfo(ip: ip);
+
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      return IpInfo(
+        ip: ip,
+        isp: (json['org'] as String?) ?? '',
+        hostname: (json['hostname'] as String?) ?? '',
+        country: (json['country'] as String?) ?? '',
+      );
     } catch (_) {
-      return 'nu';
+      return IpInfo(ip: ip);
     }
   }
 
@@ -131,38 +174,61 @@ class ConnectionCheck {
     }
   }
 
-  /// Parse ALL nameservers from scutil --dns. This is the reliable
-  /// way to see what macOS is actually using for DNS resolution,
-  /// including DHCP-assigned servers. networksetup -getdnsservers
-  /// only shows manually configured ones.
+  /// Use both `scutil --dns` and `cat /etc/resolv.conf` to reliably
+  /// detect DNS servers on macOS. scutil sometimes misses IPv4 servers
+  /// that are visible in resolv.conf.
   static Future<(List<String>, List<String>)> _detectDnsMacOS() async {
-    final result = await Process.run('/usr/sbin/scutil', <String>['--dns']);
-    if (result.exitCode != 0) return (<String>['eroare scutil'], <String>[]);
-
-    final lines = (result.stdout as String).split('\n');
     final v4 = <String>{};
     final v6 = <String>{};
 
-    for (final line in lines) {
-      final trimmed = line.trim();
-      if (!trimmed.startsWith('nameserver[')) continue;
-
-      // Format: "nameserver[0] : 10.8.0.1" or "nameserver[0] : 2001:db8::1"
-      final colonIdx = trimmed.indexOf(' : ');
-      if (colonIdx < 0) continue;
-      final ip = trimmed.substring(colonIdx + 3).trim();
-      if (ip.isEmpty) continue;
-
-      // Skip link-local IPv6 (fe80::) and interface-suffixed (%en0)
-      if (ip.contains('%')) continue;
-      if (ip.toLowerCase().startsWith('fe80:')) continue;
-
-      if (ip.contains(':')) {
-        v6.add(ip);
-      } else {
-        v4.add(ip);
+    // Source 1: /etc/resolv.conf — always has the active DNS servers
+    try {
+      final resolvResult = await Process.run(
+        '/bin/cat', <String>['/etc/resolv.conf'],
+      );
+      if (resolvResult.exitCode == 0) {
+        for (final line in (resolvResult.stdout as String).split('\n')) {
+          final trimmed = line.trim();
+          if (!trimmed.startsWith('nameserver ')) continue;
+          final ip = trimmed.substring(11).trim();
+          if (ip.isEmpty) continue;
+          if (ip.contains('%')) continue;
+          if (ip.toLowerCase().startsWith('fe80:')) continue;
+          if (ip.contains(':')) {
+            v6.add(ip);
+          } else {
+            v4.add(ip);
+          }
+        }
       }
-    }
+    } catch (_) {}
+
+    // Source 2: scutil --dns — more detailed, catches additional resolvers
+    try {
+      final scutilResult = await Process.run(
+        '/usr/sbin/scutil', <String>['--dns'],
+      );
+      if (scutilResult.exitCode == 0) {
+        for (final line in (scutilResult.stdout as String).split('\n')) {
+          final trimmed = line.trim();
+          if (!trimmed.startsWith('nameserver[')) continue;
+
+          // Handle both "nameserver[0] : IP" and "nameserver[0]: IP"
+          final idx = trimmed.indexOf(':');
+          if (idx < 0) continue;
+          final ip = trimmed.substring(idx + 1).trim();
+          if (ip.isEmpty) continue;
+          if (ip.contains('%')) continue;
+          if (ip.toLowerCase().startsWith('fe80:')) continue;
+
+          if (ip.contains(':')) {
+            v6.add(ip);
+          } else {
+            v4.add(ip);
+          }
+        }
+      }
+    } catch (_) {}
 
     if (v4.isEmpty && v6.isEmpty) {
       return (<String>['nu s-au detectat'], <String>[]);
