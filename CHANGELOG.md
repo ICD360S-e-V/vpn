@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.14.0](https://github.com/ICD360S-e-V/vpn/compare/v1.13.1...v1.14.0) (2026-04-12)
+
+
+### Features
+
+* add peers indicator in footer + fix build warnings ([e671b14](https://github.com/ICD360S-e-V/vpn/commit/e671b1448a6150089c1963fa4807fc7eddd35f6a))
+
 ## [1.13.1](https://github.com/ICD360S-e-V/vpn/compare/v1.13.0...v1.13.1) (2026-04-12)
 
 
