@@ -302,7 +302,7 @@ class VpnTunnel {
           final id = (await idFile.readAsString()).isNotEmpty ? idJson : '';
           if (id.isNotEmpty) {
             // Parse minimal JSON to extract PEMs
-            final decoded = Uri.decodeFull(id); // just use raw
+            // Parse PEM fields from identity JSON
             // Write PEM files from identity for curl test
             final match = RegExp(r'"cert_pem"\s*:\s*"(.*?)"', dotAll: true).firstMatch(id);
             final matchKey = RegExp(r'"key_pem"\s*:\s*"(.*?)"', dotAll: true).firstMatch(id);
