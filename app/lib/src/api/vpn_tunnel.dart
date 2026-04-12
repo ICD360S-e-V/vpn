@@ -171,6 +171,9 @@ class VpnTunnel {
       final leakFixUp = _macosLeakProtectionUp();
       await _runWithMacosAdmin(<String>[wgQuick, 'up', confPath]);
       appLogger.info('VPN', 'wg-quick up reușit');
+      // Log routing diagnostics so we can see if macOS set up
+      // routes correctly through the utun interface.
+      await _logMacosDiagnostics();
       try {
         await _runWithMacosAdmin(
           <String>['/bin/sh', '-c', leakFixUp],
@@ -182,6 +185,56 @@ class VpnTunnel {
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'up', confPath]);
       appLogger.info('VPN', 'wg-quick up reușit');
+    }
+  }
+
+  /// Log routing table, wg show, and interface list after connect
+  /// so we can diagnose routing issues from the in-app console.
+  static Future<void> _logMacosDiagnostics() async {
+    try {
+      // Routing table — look for utun routes
+      final routeResult = await Process.run(
+        '/usr/sbin/netstat', <String>['-rn', '-f', 'inet'],
+      );
+      if (routeResult.exitCode == 0) {
+        final lines = (routeResult.stdout as String).split('\n');
+        for (final line in lines) {
+          if (line.contains('utun') || line.contains('default')) {
+            appLogger.info('ROUTE', line.trim());
+          }
+        }
+      }
+      // WireGuard interface status
+      final wg = await _findWg();
+      if (wg != null) {
+        final wgResult = await Process.run(wg, <String>['show']);
+        if (wgResult.exitCode == 0) {
+          final out = (wgResult.stdout as String).trim();
+          if (out.isNotEmpty) {
+            for (final line in out.split('\n')) {
+              final trimmed = line.trim();
+              if (trimmed.startsWith('interface:') ||
+                  trimmed.startsWith('listening port:') ||
+                  trimmed.startsWith('peer:') ||
+                  trimmed.startsWith('endpoint:') ||
+                  trimmed.startsWith('allowed ips:') ||
+                  trimmed.startsWith('latest handshake:') ||
+                  trimmed.startsWith('transfer:')) {
+                appLogger.info('WG', trimmed);
+              }
+            }
+          }
+        } else {
+          appLogger.warn('WG', 'wg show necesită sudo — nu pot citi detalii');
+        }
+      }
+      // Network interfaces
+      final ifResult = await Process.run('/sbin/ifconfig', <String>['-l']);
+      if (ifResult.exitCode == 0) {
+        appLogger.info('NET', 'Interfețe: ${(ifResult.stdout as String).trim()}');
+      }
+    } catch (e) {
+      appLogger.warn('DIAG', 'Diagnostice eșuate: $e');
     }
   }
 
