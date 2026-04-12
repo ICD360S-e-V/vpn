@@ -176,11 +176,15 @@ class _IpCard extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            _IpRow(label: 'IPv4', value: info.publicIpv4, badge: info.isVpnActive ? 'VPN' : null),
-            const SizedBox(height: 6),
-            _IpRow(
+            _IpDetail(
+              label: 'IPv4',
+              ipInfo: info.ipv4,
+              badge: info.isVpnActive ? 'VPN' : null,
+            ),
+            const SizedBox(height: 10),
+            _IpDetail(
               label: 'IPv6',
-              value: info.publicIpv6 == 'nu' ? 'nedisponibil' : info.publicIpv6,
+              ipInfo: info.ipv6,
               badge: info.isIpv6Leaking ? 'LEAK!' : null,
               badgeColor: Colors.red,
             ),
@@ -191,28 +195,57 @@ class _IpCard extends StatelessWidget {
   }
 }
 
-class _IpRow extends StatelessWidget {
-  const _IpRow({required this.label, required this.value, this.badge, this.badgeColor});
+class _IpDetail extends StatelessWidget {
+  const _IpDetail({required this.label, required this.ipInfo, this.badge, this.badgeColor});
   final String label;
-  final String value;
+  final IpInfo ipInfo;
   final String? badge;
   final Color? badgeColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
+    final isEmpty = ipInfo.isEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        SizedBox(
-          width: 40,
-          child: Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+        Row(
+          children: <Widget>[
+            SizedBox(
+              width: 40,
+              child: Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _CopyableText(text: isEmpty ? 'nedisponibil' : ipInfo.ip)),
+            if (badge != null) ...<Widget>[
+              const SizedBox(width: 8),
+              Text(badge!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeColor ?? Colors.green.shade700)),
+            ],
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(child: _CopyableText(text: value)),
-        if (badge != null) ...<Widget>[
-          const SizedBox(width: 8),
-          Text(badge!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badgeColor ?? Colors.green.shade700)),
-        ],
+        if (!isEmpty && ipInfo.isp.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 48, top: 2),
+            child: Text(
+              ipInfo.isp,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        if (!isEmpty && ipInfo.hostname.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 48, top: 1),
+            child: Text(
+              ipInfo.hostname,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -314,11 +347,11 @@ class _Ipv6Card extends StatelessWidget {
       iconColor = Colors.green;
       icon = Icons.check_circle_outline;
     } else if (info.isIpv6Leaking) {
-      subtitle = 'LEAK — adresa IPv6 a providerului este vizibilă: ${info.publicIpv6}';
+      subtitle = 'LEAK — adresa IPv6 a providerului este vizibilă: ${info.ipv6.ip}';
       iconColor = Colors.red;
       icon = Icons.warning_amber;
     } else if (info.hasIpv6) {
-      subtitle = 'Adresa IPv6 a providerului: ${info.publicIpv6}';
+      subtitle = 'Adresa IPv6 a providerului: ${info.ipv6.ip}';
       iconColor = theme.colorScheme.outline;
       icon = Icons.info_outline;
     } else {
