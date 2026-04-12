@@ -16,8 +16,8 @@ name: Release Please
 #          release-please's "generic" updater touch only that one
 #          line in pubspec)
 #        - the bumped manifest entry in .release-please-manifest.json
-#   3. We review/merge the Release PR. release-please then creates
-#      the git tag `vX.Y.Z` and a GitHub Release entry.
+#   3. The release PR auto-merges once all checks pass. release-please
+#      then creates the git tag `vX.Y.Z` and a GitHub Release entry.
 #   4. The tag push fires .github/workflows/flutter.yml AND
 #      .github/workflows/agent.yml on `v*`, which run the existing
 #      build matrix + deploy steps. Build number is derived from the
@@ -80,6 +80,24 @@ jobs:
             --repo-url="$GITHUB_REPOSITORY" \
             --config-file=release-please-config.json \
             --manifest-file=.release-please-manifest.json
+
+      # Auto-merge the release PR once all status checks pass.
+      # This removes the manual "merge" step — the full pipeline
+      # becomes: push feat:/fix: → release-please opens PR →
+      # checks pass → auto-merge → tag created → builds run.
+      - name: Enable auto-merge on release PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+               --head release-please--branches--main \
+               --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then
+            echo "Enabling auto-merge (squash) on PR #$PR"
+            gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto
+          else
+            echo "No release PR found, skipping auto-merge"
+          fi
 
       - name: Run release-please manifest-release (cut tag + GitHub Release on PR merge)
         env:
