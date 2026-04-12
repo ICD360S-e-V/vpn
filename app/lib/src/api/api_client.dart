@@ -14,6 +14,7 @@ import '../models/health.dart';
 import '../models/peer.dart';
 import '../models/peer_create_response.dart';
 import '../models/traffic_series.dart';
+import 'app_logger.dart';
 import 'mtls_context.dart';
 import 'user_agent.dart';
 
@@ -144,7 +145,7 @@ class ApiClient {
         queryParameters: query,
         options: Options(method: method),
       );
-    } on DioException {
+    } on DioException catch (dioErr) {
       // The agent listens on https://10.8.0.1:8443 which is reachable
       // ONLY through the WireGuard tunnel. If the user hasn't activated
       // the tunnel yet (or it dropped), every request fails with
@@ -152,6 +153,8 @@ class ApiClient {
       // The raw dart:io message ("...this indicates an error which
       // most likely cannot be solved by the library") is meaningless
       // to a non-developer; replace it with a clear Romanian prompt.
+      final reason = dioErr.message ?? dioErr.error?.toString() ?? 'unknown';
+      appLogger.error('API', '$method $path — transport error: $reason');
       throw ApiError(
         kind: ApiErrorKind.transport,
         message: 'Vă rugăm să vă conectați la VPN pentru a fi afișate '
@@ -161,6 +164,7 @@ class ApiClient {
     }
 
     final status = resp.statusCode ?? 0;
+    appLogger.info('API', '$method $path → $status');
     if (status >= 200 && status < 300) {
       if (expectEmpty || resp.data == null) {
         // Caller asked for void; return whatever T defaults to via
@@ -180,6 +184,7 @@ class ApiClient {
         resp.data is Map<String, dynamic>) {
       throw ApiError.fromProblemDetails(status, resp.data as Map<String, dynamic>);
     }
+    appLogger.error('API', '$method $path → HTTP $status');
     throw ApiError(
       kind: ApiErrorKind.http,
       message: 'HTTP $status',
