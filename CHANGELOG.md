@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.5.0](https://github.com/ICD360S-e-V/vpn/compare/v1.4.6...v1.5.0) (2026-04-12)
+
+
+### Features
+
+* log routing table and WG diagnostics after VPN connect ([f322211](https://github.com/ICD360S-e-V/vpn/commit/f322211860c6f211f6babbb344b9f04ed3d63c5b))
+
 ## [1.4.6](https://github.com/ICD360S-e-V/vpn/compare/v1.4.5...v1.4.6) (2026-04-12)
 
 
