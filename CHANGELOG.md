@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.4.1](https://github.com/ICD360S-e-V/vpn/compare/v1.4.0...v1.4.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* rewrite DNS detection and separate IPv4/IPv6 IP checks ([bcaec84](https://github.com/ICD360S-e-V/vpn/commit/bcaec844b4559028f6e1863b656589ca89a8e8d7))
+
 ## [1.4.0](https://github.com/ICD360S-e-V/vpn/compare/v1.3.1...v1.4.0) (2026-04-12)
 
 
