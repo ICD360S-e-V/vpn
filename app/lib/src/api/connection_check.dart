@@ -1,9 +1,9 @@
 // ICD360SVPN — lib/src/api/connection_check.dart
 //
 // Lightweight connection diagnostics — public IP detection, DNS
-// server discovery, and leak checks. Inspired by ProtonVPN's
-// built-in leak protection dashboard and Mullvad's connection
-// check page.
+// server discovery, and leak checks. Follows industry best
+// practices for VPN leak detection and connection
+// diagnostics.
 //
 // Uses plain dart:io HttpClient (not the mTLS Dio instance) so
 // it works regardless of whether the agent is reachable.
