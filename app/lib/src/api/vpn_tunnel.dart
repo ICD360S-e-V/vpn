@@ -243,7 +243,9 @@ class VpnTunnel {
       if (pingResult.exitCode == 0) {
         appLogger.info('PING', '10.8.0.1 — OK: ${(pingResult.stdout as String).trim().split('\n').last}');
       } else {
-        appLogger.error('PING', '10.8.0.1 — EȘUAT (exit ${pingResult.exitCode})');
+        final pingErr = (pingResult.stderr as String).trim();
+        final pingOut = (pingResult.stdout as String).trim();
+        appLogger.error('PING', '10.8.0.1 — EȘUAT (exit ${pingResult.exitCode}) $pingErr $pingOut');
       }
 
       // Test DNS resolution through tunnel
@@ -434,26 +436,12 @@ class VpnTunnel {
       cmds.add('$sfw --add $path 2>/dev/null || true');
       cmds.add('$sfw --unblockapp $path 2>/dev/null || true');
     }
-    // Add pf anchor rules: pass all traffic on utun interfaces.
-    // -E increases pf reference count (enables pf if needed).
-    // Token is saved for clean removal at disconnect.
-    cmds.add(
-      // pass utun traffic + block IPv6 on physical interfaces to
-      // prevent leaking ISP IPv6 (server has no IPv6).
-      "printf 'pass quick on utun all\\nblock drop quick inet6 all\\n' "
-      // Use -f (load rules) NOT -Ef (enable pf + load).
-      // -E enables the macOS packet filter which has a default
-      // block-all policy — that kills WireGuard's own encrypted
-      // UDP packets on en0 before they reach the server.
-      "| pfctl -a $anchor -f - 2>/dev/null || true",
-    );
     return cmds.join(' && ');
   }
 
-  /// Cleanup pf anchor rules.
+  /// Cleanup — nothing needed, socketfilterfw changes are persistent.
   static String _macosFirewallCleanup() {
-    const anchor = 'com.apple/wireguard';
-    return 'pfctl -a $anchor -F all 2>/dev/null || true';
+    return 'true';
   }
 
   /// Probes whether a WireGuard tunnel is currently up by looking for
