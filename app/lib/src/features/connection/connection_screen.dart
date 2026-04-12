@@ -1,7 +1,7 @@
 // ICD360SVPN — lib/src/features/connection/connection_screen.dart
 //
-// Connection diagnostics dashboard inspired by ProtonVPN's
-// connection info panel and Mullvad's leak check page. Shows:
+// Connection diagnostics dashboard following industry-standard
+// VPN client leak detection practices. Shows:
 //   - Current public IP
 //   - DNS servers in use + leak indicator
 //   - IPv6 leak indicator
