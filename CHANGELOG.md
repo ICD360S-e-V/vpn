@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.8.1](https://github.com/ICD360S-e-V/vpn/compare/v1.8.0...v1.8.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* await ApiClient.create in bootstrap and enrollment ([870bebd](https://github.com/ICD360S-e-V/vpn/commit/870bebdd27174c8bb236887ff1bd441681b9332a))
+* convert PEM to PKCS12 on macOS for mTLS client cert ([972c16a](https://github.com/ICD360S-e-V/vpn/commit/972c16aedd606574a06100ecba3a603428adc1d9))
+* make ApiClient.create async for PKCS12 conversion ([f1c8453](https://github.com/ICD360S-e-V/vpn/commit/f1c8453af90bb7a6620b9135e6063618e1940606))
+
 ## [1.8.0](https://github.com/ICD360S-e-V/vpn/compare/v1.7.1...v1.8.0) (2026-04-12)
 
 
