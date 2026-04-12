@@ -67,9 +67,12 @@ jobs:
         with:
           node-version: '24'
 
+      # Use a PAT instead of GITHUB_TOKEN because the enterprise
+      # policy blocks Actions from creating pull requests with the
+      # built-in token. The PAT is stored as RELEASE_PLEASE_TOKEN.
       - name: Run release-please manifest-pr (open / update Release PR)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -e
           npx --yes release-please@latest manifest-pr \
@@ -80,7 +83,7 @@ jobs:
 
       - name: Run release-please manifest-release (cut tag + GitHub Release on PR merge)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -e
           npx --yes release-please@latest manifest-release \
