@@ -102,15 +102,16 @@ class ConnectionCheck {
 
   /// Detect public IP and look up ISP/hostname via ipinfo.io.
   static Future<IpInfo> _detectIpWithInfo({required bool ipv6}) async {
-    final flag = ipv6 ? '-6' : '-4';
-    final endpoint = ipv6 ? 'https://api6.ipify.org' : 'https://api.ipify.org';
+    // api.ipify.org = IPv4 only, api6.ipify.org = IPv6 only
+    // api64.ipify.org = dual-stack (returns whichever connects)
+    final endpoint = ipv6 ? 'https://api6.ipify.org' : 'https://api64.ipify.org';
     final timeout = ipv6 ? '4' : '8';
 
     try {
-      // Step 1: get IP
+      // Step 1: get IP — no -4/-6 flag, let the system choose
       final ipResult = await Process.run('/usr/bin/curl', <String>[
         '-s', '--connect-timeout', timeout, '--max-time', '10',
-        flag, endpoint,
+        endpoint,
       ]).timeout(const Duration(seconds: 12));
       if (ipResult.exitCode != 0) {
         if (ipv6) return const IpInfo(ip: 'nu');
