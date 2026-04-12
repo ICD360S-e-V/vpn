@@ -71,12 +71,12 @@ jobs:
       # Use a PAT instead of GITHUB_TOKEN because the enterprise
       # policy blocks Actions from creating pull requests with the
       # built-in token. The PAT is stored as RELEASE_PLEASE_TOKEN.
-      - name: Run release-please manifest-pr (open / update Release PR)
+      - name: Run release-please release-pr (open / update Release PR)
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -e
-          npx --yes release-please@latest manifest-pr \
+          npx --yes release-please@latest release-pr \
             --token="$GITHUB_TOKEN" \
             --repo-url="$GITHUB_REPOSITORY" \
             --config-file=release-please-config.json \
