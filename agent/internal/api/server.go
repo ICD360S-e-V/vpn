@@ -59,6 +59,7 @@ func NewServer(cfg Config) (*Server, error) {
 	mux.HandleFunc("PATCH /v1/peers/{pubkey}", h.patchPeer)
 	mux.HandleFunc("DELETE /v1/peers/{pubkey}", h.deletePeer)
 	mux.HandleFunc("GET /v1/peers/{pubkey}/bandwidth", h.getPeerBandwidth)
+	mux.HandleFunc("POST /v1/config/refresh", h.refreshConfig)
 
 	// Build the plaintext enrollment listener if configured. This is
 	// the ONLY route exposed there; nginx reverse-proxies it under
