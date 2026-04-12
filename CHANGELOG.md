@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.10](https://github.com/ICD360S-e-V/vpn/compare/v1.10.9...v1.10.10) (2026-04-12)
+
+
+### Bug Fixes
+
+* remove pfctl anchor rules — may interfere with tunnel ([672576b](https://github.com/ICD360S-e-V/vpn/commit/672576b4182a38a89ac6db819187b49abae31606))
+
 ## [1.10.9](https://github.com/ICD360S-e-V/vpn/compare/v1.10.8...v1.10.9) (2026-04-12)
 
 
