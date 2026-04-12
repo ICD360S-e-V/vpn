@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.17.0](https://github.com/ICD360S-e-V/vpn/compare/v1.16.0...v1.17.0) (2026-04-12)
+
+
+### Features
+
+* add AdGuard Home dashboard screen ([c1e9481](https://github.com/ICD360S-e-V/vpn/commit/c1e9481bcfca854e1c565b40e8495a3e47a18293))
+* add AdGuard tab in NavigationRail ([e82f050](https://github.com/ICD360S-e-V/vpn/commit/e82f0509264fd83f9d301579c39ed6ab5ff5cee2))
+
 ## [1.16.0](https://github.com/ICD360S-e-V/vpn/compare/v1.15.0...v1.16.0) (2026-04-12)
 
 
