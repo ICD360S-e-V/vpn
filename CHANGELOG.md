@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.2](https://github.com/ICD360S-e-V/vpn/compare/v1.10.1...v1.10.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* use pfctl anchors instead of disabling macOS firewall ([e8a9011](https://github.com/ICD360S-e-V/vpn/commit/e8a9011df571b1320f689c852f0524ae2ba3203e))
+
 ## [1.10.1](https://github.com/ICD360S-e-V/vpn/compare/v1.10.0...v1.10.1) (2026-04-12)
 
 
