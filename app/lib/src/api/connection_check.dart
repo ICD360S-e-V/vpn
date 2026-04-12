@@ -100,33 +100,50 @@ class ConnectionCheck {
     return info;
   }
 
-  /// Detect public IP and look up ISP/hostname via ipinfo.io.
+  /// Detect public IP with fallback across multiple APIs, then
+  /// look up ISP/hostname. Multiple endpoints ensure detection
+  /// works even if one service is down or rate-limited.
   static Future<IpInfo> _detectIpWithInfo({required bool ipv6}) async {
-    // api.ipify.org = IPv4 only, api6.ipify.org = IPv6 only
-    // api64.ipify.org = dual-stack (returns whichever connects)
-    final endpoint = ipv6 ? 'https://api6.ipify.org' : 'https://api64.ipify.org';
-    final timeout = ipv6 ? '4' : '8';
+    final endpoints = ipv6
+        ? <String>['https://api6.ipify.org', 'https://v6.ident.me']
+        : <String>[
+            'https://api64.ipify.org',
+            'https://ifconfig.me/ip',
+            'https://icanhazip.com',
+            'https://ident.me',
+          ];
+    final timeout = ipv6 ? '4' : '6';
 
-    try {
-      // Step 1: get IP — no -4/-6 flag, let the system choose
-      final ipResult = await Process.run('/usr/bin/curl', <String>[
-        '-s', '--connect-timeout', timeout, '--max-time', '10',
-        endpoint,
-      ]).timeout(const Duration(seconds: 12));
-      if (ipResult.exitCode != 0) {
-        if (ipv6) return const IpInfo(ip: 'nu');
-        appLogger.error('CHECK', 'curl IPv4 exit ${ipResult.exitCode}');
-        return const IpInfo(ip: 'eroare');
+    String? ip;
+    for (final endpoint in endpoints) {
+      try {
+        final result = await Process.run('/usr/bin/curl', <String>[
+          '-s', '--connect-timeout', timeout, '--max-time', '8',
+          '-H', 'User-Agent: curl', // some APIs require a user-agent
+          endpoint,
+        ]).timeout(const Duration(seconds: 10));
+        if (result.exitCode == 0) {
+          final out = (result.stdout as String).trim();
+          if (out.isNotEmpty && !out.contains('<')) {
+            ip = out;
+            break;
+          }
+        }
+      } catch (_) {
+        continue;
       }
-      final ip = (ipResult.stdout as String).trim();
-      if (ip.isEmpty) {
-        return IpInfo(ip: ipv6 ? 'nu' : 'eroare');
-      }
-      if (ipv6 && !ip.contains(':')) return const IpInfo(ip: 'nu');
+    }
 
-      // Step 2: lookup ISP + hostname via ipinfo.io
-      final info = await _lookupIpInfo(ip);
-      return info;
+    if (ip == null || ip.isEmpty) {
+      if (ipv6) return const IpInfo(ip: 'nu');
+      appLogger.error('CHECK', 'Niciun API de IP nu a răspuns');
+      return const IpInfo(ip: 'eroare');
+    }
+    if (ipv6 && !ip.contains(':')) return const IpInfo(ip: 'nu');
+
+    // Look up ISP + hostname
+    final info = await _lookupIpInfo(ip);
+    return info;
     } catch (e) {
       if (!ipv6) appLogger.error('CHECK', 'Nu am putut detecta IPv4: $e');
       return IpInfo(ip: ipv6 ? 'nu' : 'eroare');
