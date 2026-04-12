@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.14.3](https://github.com/ICD360S-e-V/vpn/compare/v1.14.2...v1.14.3) (2026-04-12)
+
+
+### Bug Fixes
+
+* multiple IP detection APIs with fallback ([38f8308](https://github.com/ICD360S-e-V/vpn/commit/38f83082e21bddb4dfe27f46fc9a6a1278574e79))
+
 ## [1.14.2](https://github.com/ICD360S-e-V/vpn/compare/v1.14.1...v1.14.2) (2026-04-12)
 
 
