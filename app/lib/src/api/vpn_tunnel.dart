@@ -35,6 +35,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'app_logger.dart';
+
 class VpnTunnelException implements Exception {
   VpnTunnelException(this.message, {this.userCancelled = false});
   final String message;
@@ -161,14 +163,29 @@ class VpnTunnel {
       );
     }
 
+    appLogger.info('VPN', 'Pornire tunel WireGuard…');
     if (Platform.isMacOS) {
+      // Leak protection: disable IPv6 + force DNS through VPN
+      // in the same admin session as wg-quick up. Inspired by
+      // ProtonVPN/Mullvad's system-wide kill-switch approach.
+      final leakFixUp = _macosLeakProtectionUp();
       await _runWithMacosAdmin(<String>[wgQuick, 'up', confPath]);
+      appLogger.info('VPN', 'wg-quick up reușit');
+      try {
+        await _runWithMacosAdmin(
+          <String>['/bin/sh', '-c', leakFixUp],
+        );
+        appLogger.info('DNS', 'DNS forțat la 10.8.0.1, IPv6 dezactivat');
+      } catch (e) {
+        appLogger.warn('DNS', 'Nu am putut aplica leak protection: $e');
+      }
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'up', confPath]);
+      appLogger.info('VPN', 'wg-quick up reușit');
     }
   }
 
-  /// Brings the WireGuard tunnel DOWN.
+  /// Brings the WireGuard tunnel DOWN and restores DNS/IPv6.
   static Future<void> disconnect() async {
     if (!Platform.isMacOS && !Platform.isLinux) {
       throw VpnTunnelException(
@@ -186,11 +203,59 @@ class VpnTunnel {
     if (wgQuick == null) {
       throw VpnTunnelException('wg-quick nu a fost găsit pe sistem.');
     }
+    appLogger.info('VPN', 'Oprire tunel WireGuard…');
     if (Platform.isMacOS) {
       await _runWithMacosAdmin(<String>[wgQuick, 'down', confPath]);
+      appLogger.info('VPN', 'wg-quick down reușit');
+      // Restore DNS and IPv6 after tunnel goes down.
+      try {
+        final leakFixDown = _macosLeakProtectionDown();
+        await _runWithMacosAdmin(
+          <String>['/bin/sh', '-c', leakFixDown],
+        );
+        appLogger.info('DNS', 'DNS restaurat la DHCP, IPv6 reactivat');
+      } catch (e) {
+        appLogger.warn('DNS', 'Nu am putut restaura DNS/IPv6: $e');
+      }
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'down', confPath]);
+      appLogger.info('VPN', 'wg-quick down reușit');
     }
+  }
+
+  /// Shell commands to force DNS through VPN and block IPv6 leaks.
+  /// Runs as admin via osascript. Covers Wi-Fi + Ethernet + USB
+  /// (the three common macOS network services).
+  ///
+  /// Approach modeled after ProtonVPN and Mullvad:
+  ///   - Force DNS to VPN's AdGuard Home (10.8.0.1)
+  ///   - Disable IPv6 to prevent leaking ISP's v6 address
+  ///   - Flush DNS cache so stale entries don't leak
+  static String _macosLeakProtectionUp() {
+    const dns = '10.8.0.1';
+    const services = <String>['Wi-Fi', 'Ethernet', 'USB 10/100/1000 LAN'];
+    final cmds = <String>[];
+    for (final svc in services) {
+      cmds.add("networksetup -setdnsservers '$svc' $dns 2>/dev/null || true");
+      cmds.add("networksetup -setv6off '$svc' 2>/dev/null || true");
+    }
+    cmds.add('dscacheutil -flushcache 2>/dev/null || true');
+    cmds.add('killall -HUP mDNSResponder 2>/dev/null || true');
+    return cmds.join(' && ');
+  }
+
+  /// Restore DNS to DHCP defaults and re-enable IPv6.
+  static String _macosLeakProtectionDown() {
+    const services = <String>['Wi-Fi', 'Ethernet', 'USB 10/100/1000 LAN'];
+    final cmds = <String>[];
+    for (final svc in services) {
+      cmds.add("networksetup -setdnsservers '$svc' empty 2>/dev/null || true");
+      cmds.add(
+          "networksetup -setv6automatic '$svc' 2>/dev/null || true");
+    }
+    cmds.add('dscacheutil -flushcache 2>/dev/null || true');
+    cmds.add('killall -HUP mDNSResponder 2>/dev/null || true');
+    return cmds.join(' && ');
   }
 
   /// Probes whether a WireGuard tunnel is currently up by looking for
@@ -210,6 +275,7 @@ class VpnTunnel {
       // We don't try to match a specific name because wg-quick on macOS
       // assigns utun<N> dynamically and the .conf basename doesn't map
       // to a fixed interface name.
+      appLogger.info('VPN', 'Interfețe WG active: $out');
       return VpnTunnelStatus.connected;
     } catch (_) {
       return VpnTunnelStatus.unknown;
