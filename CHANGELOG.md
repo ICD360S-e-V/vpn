@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.4.4](https://github.com/ICD360S-e-V/vpn/compare/v1.4.3...v1.4.4) (2026-04-12)
+
+
+### Bug Fixes
+
+* use split-route /1 subnets instead of /0 in client configs ([4fab1ff](https://github.com/ICD360S-e-V/vpn/commit/4fab1ffd8c1e9aca95d163426563f731fc447ab1))
+
 ## [1.4.3](https://github.com/ICD360S-e-V/vpn/compare/v1.4.2...v1.4.3) (2026-04-12)
 
 
