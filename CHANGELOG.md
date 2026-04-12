@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.7](https://github.com/ICD360S-e-V/vpn/compare/v1.10.6...v1.10.7) (2026-04-12)
+
+
+### Bug Fixes
+
+* block IPv6 via pf anchor to prevent ISP IPv6 leak ([23fc8f8](https://github.com/ICD360S-e-V/vpn/commit/23fc8f8ff823b8d8c249d8b8a108f0fd5914f4ff))
+* remove IPv6 from AllowedIPs — server has no IPv6 ([ecfb29a](https://github.com/ICD360S-e-V/vpn/commit/ecfb29ac1273c209f4a0a2a5423f0988fd55d8ef))
+
 ## [1.10.6](https://github.com/ICD360S-e-V/vpn/compare/v1.10.5...v1.10.6) (2026-04-12)
 
 
