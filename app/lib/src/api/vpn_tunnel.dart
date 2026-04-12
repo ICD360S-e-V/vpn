@@ -297,6 +297,21 @@ class VpnTunnel {
     return null;
   }
 
+  /// Locate a Homebrew / MacPorts bash ≥ 4. macOS ships bash 3.2 at
+  /// /bin/bash which cannot run wg-quick (associative arrays, etc.).
+  /// Returns null if only the system bash is available.
+  static Future<String?> _findModernBash() async {
+    const candidates = <String>[
+      '/opt/homebrew/bin/bash', // Apple Silicon Homebrew
+      '/usr/local/bin/bash',    // Intel Homebrew
+      '/opt/local/bin/bash',    // MacPorts
+    ];
+    for (final p in candidates) {
+      if (await File(p).exists()) return p;
+    }
+    return null;
+  }
+
   /// Runs the given command via osascript with admin privileges. The
   /// macOS Authorization Services prompt asks the user for their
   /// password (or Touch ID if available) before the command runs.
@@ -304,10 +319,21 @@ class VpnTunnel {
   /// Returns normally on success. Throws VpnTunnelException with
   /// userCancelled=true if the user dismissed the prompt.
   static Future<void> _runWithMacosAdmin(List<String> argv) async {
+    // wg-quick's upstream shebang is #!/bin/bash which on macOS
+    // resolves to Apple's ancient bash 3.2. wg-quick requires bash 4+
+    // features (associative arrays, etc.) so we must invoke it
+    // explicitly with Homebrew's modern bash to bypass the shebang.
+    var effective = argv;
+    if (argv.isNotEmpty && argv.first.contains('wg-quick')) {
+      final modernBash = await _findModernBash();
+      if (modernBash != null) {
+        effective = <String>[modernBash, ...argv];
+      }
+    }
     // We must shell-escape each arg because osascript will interpret
     // the resulting string in a sub-shell. Single-quote each arg
     // and escape any embedded single quotes by closing+reopening.
-    final shellLine = argv.map(_shellEscape).join(' ');
+    final shellLine = effective.map(_shellEscape).join(' ');
     // Inner double quotes need to be escaped for AppleScript.
     final appleEscaped = shellLine.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
     final script =
