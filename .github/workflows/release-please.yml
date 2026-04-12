@@ -87,6 +87,7 @@ jobs:
       # becomes: push feat:/fix: → release-please opens PR →
       # checks pass → auto-merge → tag created → builds run.
       - name: Enable auto-merge on release PR
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
