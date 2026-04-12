@@ -184,9 +184,9 @@ class VpnTunnel {
       final leakFixUp = _macosLeakProtectionUp();
       await _runWithMacosAdmin(<String>[wgQuick, 'up', confPath]);
       appLogger.info('VPN', 'wg-quick up reușit');
-      // Log routing diagnostics so we can see if macOS set up
-      // routes correctly through the utun interface.
-      await _logMacosDiagnostics();
+      // DNS + IPv6 leak protection IMMEDIATELY after tunnel is up,
+      // BEFORE any other network calls. Otherwise the app and system
+      // use the old DNS which doesn't route through the tunnel.
       try {
         await _runWithMacosAdmin(
           <String>['/bin/sh', '-c', leakFixUp],
@@ -195,6 +195,8 @@ class VpnTunnel {
       } catch (e) {
         appLogger.warn('DNS', 'Nu am putut aplica leak protection: $e');
       }
+      // Diagnostics AFTER DNS is set so they test the real config.
+      await _logMacosDiagnostics();
     } else {
       await _runWithLinuxAdmin(<String>[wgQuick, 'up', confPath]);
       appLogger.info('VPN', 'wg-quick up reușit');
