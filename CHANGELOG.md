@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.6.0](https://github.com/ICD360S-e-V/vpn/compare/v1.5.3...v1.6.0) (2026-04-12)
+
+
+### Features
+
+* extended VPN diagnostics — ping, wireguard-go process, firewall, pf, utun ([6561a0e](https://github.com/ICD360S-e-V/vpn/commit/6561a0e88f171f07581ee0c3e914f27b44e2515a))
+
 ## [1.5.3](https://github.com/ICD360S-e-V/vpn/compare/v1.5.2...v1.5.3) (2026-04-12)
 
 
