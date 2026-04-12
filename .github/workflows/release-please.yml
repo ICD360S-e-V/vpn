@@ -39,6 +39,7 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -104,7 +105,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -e
-          npx --yes release-please@latest manifest-release \
+          npx --yes release-please@latest github-release \
             --token="$GITHUB_TOKEN" \
             --repo-url="$GITHUB_REPOSITORY" \
             --config-file=release-please-config.json \
