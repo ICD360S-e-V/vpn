@@ -489,7 +489,12 @@ func renderClientConfig(in clientConfigInput) string {
 	fmt.Fprintln(&b, "PublicKey           =", in.ServerPublicKey)
 	fmt.Fprintln(&b, "PresharedKey        =", in.PresharedKey)
 	fmt.Fprintln(&b, "Endpoint            =", in.Endpoint)
-	fmt.Fprintln(&b, "AllowedIPs          = 0.0.0.0/0, ::/0")
+	// Use split-route /1 subnets instead of /0 to avoid clobbering
+	// the default gateway on macOS. wg-quick on macOS has trouble
+	// replacing the default route with 0.0.0.0/0; the two /1 routes
+	// cover the full address space while keeping the original gateway
+	// intact. Same trick for IPv6.
+	fmt.Fprintln(&b, "AllowedIPs          = 0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1")
 	fmt.Fprintln(&b, "PersistentKeepalive = 25")
 	return b.String()
 }
