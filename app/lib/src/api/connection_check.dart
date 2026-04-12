@@ -144,10 +144,6 @@ class ConnectionCheck {
     // Look up ISP + hostname
     final info = await _lookupIpInfo(ip);
     return info;
-    } catch (e) {
-      if (!ipv6) appLogger.error('CHECK', 'Nu am putut detecta IPv4: $e');
-      return IpInfo(ip: ipv6 ? 'nu' : 'eroare');
-    }
   }
 
   /// Query ipinfo.io for ISP, hostname, and country.
