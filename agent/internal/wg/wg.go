@@ -378,6 +378,58 @@ func (m *Manager) serverPublicKey() (string, error) {
 	return dev.PublicKey.String(), nil
 }
 
+// RefreshConfig returns an updated WireGuard client .conf for an
+// existing peer identified by their public key. The caller provides
+// the client's private key (which the server never stores). Returns
+// ("", nil) if the peer is not found.
+func (m *Manager) RefreshConfig(ctx context.Context, clientPubKey, clientPrivKey string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg, err := readConfigFile(m.confPath)
+	if err != nil {
+		return "", fmt.Errorf("read wg0.conf: %w", err)
+	}
+
+	// Find the peer section matching the public key.
+	for _, s := range cfg.Sections {
+		if s.Type != sectionPeer {
+			continue
+		}
+		var pub, psk, allowedIPs string
+		for _, e := range s.Entries {
+			switch e.Key {
+			case "PublicKey":
+				pub = e.Value
+			case "PresharedKey":
+				psk = e.Value
+			case "AllowedIPs":
+				allowedIPs = e.Value
+			}
+		}
+		if pub != clientPubKey {
+			continue
+		}
+
+		serverPub, err := m.serverPublicKey()
+		if err != nil {
+			return "", fmt.Errorf("read server pubkey: %w", err)
+		}
+
+		conf := renderClientConfig(clientConfigInput{
+			ClientPrivateKey: clientPrivKey,
+			ClientAddress:    strings.TrimSpace(allowedIPs),
+			DNS:              "10.8.0.1",
+			MTU:              1280,
+			ServerPublicKey:  serverPub,
+			PresharedKey:     psk,
+			Endpoint:         m.publicEnd,
+		})
+		return conf, nil
+	}
+	return "", nil
+}
+
 // livePeer is the per-peer runtime data extracted from wgctrl.
 type livePeer struct {
 	PublicKey     string
