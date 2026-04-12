@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.7.0](https://github.com/ICD360S-e-V/vpn/compare/v1.6.0...v1.7.0) (2026-04-12)
+
+
+### Features
+
+* add DNS/TCP/curl tunnel connectivity tests to diagnostics ([31bc046](https://github.com/ICD360S-e-V/vpn/commit/31bc0462269bbf9a0643e493f56763b40ced55c0))
+
 ## [1.6.0](https://github.com/ICD360S-e-V/vpn/compare/v1.5.3...v1.6.0) (2026-04-12)
 
 
