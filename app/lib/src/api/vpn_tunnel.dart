@@ -289,6 +289,50 @@ class VpnTunnel {
         appLogger.error('TCP-TEST', 'nc 10.8.0.1:8443 → ÎNCHIS/timeout (exit ${ncResult.exitCode})');
       }
 
+      // Test mTLS with curl (bypasses dart:io issues)
+      try {
+        final dir = await getApplicationSupportDirectory();
+        final certFile = File('${dir.path}/_diag_cert.pem');
+        final keyFile = File('${dir.path}/_diag_key.pem');
+        final caFile = File('${dir.path}/_diag_ca.pem');
+        // Read identity to get cert/key/ca
+        final idFile = File('${dir.path}/identity.json');
+        if (await idFile.exists()) {
+          final idJson = await idFile.readAsString();
+          final id = (await idFile.readAsString()).isNotEmpty ? idJson : '';
+          if (id.isNotEmpty) {
+            // Parse minimal JSON to extract PEMs
+            final decoded = Uri.decodeFull(id); // just use raw
+            // Write PEM files from identity for curl test
+            final match = RegExp(r'"cert_pem"\s*:\s*"(.*?)"', dotAll: true).firstMatch(id);
+            final matchKey = RegExp(r'"key_pem"\s*:\s*"(.*?)"', dotAll: true).firstMatch(id);
+            final matchCa = RegExp(r'"ca_pem"\s*:\s*"(.*?)"', dotAll: true).firstMatch(id);
+            if (match != null && matchKey != null && matchCa != null) {
+              await certFile.writeAsString(match.group(1)!.replaceAll('\\n', '\n'));
+              await keyFile.writeAsString(matchKey.group(1)!.replaceAll('\\n', '\n'));
+              await caFile.writeAsString(matchCa.group(1)!.replaceAll('\\n', '\n'));
+              final mtlsResult = await Process.run('/usr/bin/curl', <String>[
+                '-sk', '--cert', certFile.path, '--key', keyFile.path,
+                '--cacert', caFile.path, '--connect-timeout', '5',
+                'https://10.8.0.1:8443/v1/health',
+              ]).timeout(const Duration(seconds: 8), onTimeout: () =>
+                ProcessResult(0, 1, '', 'timeout'));
+              if (mtlsResult.exitCode == 0) {
+                appLogger.info('mTLS-TEST', 'curl mTLS → OK: ${(mtlsResult.stdout as String).trim().substring(0, 80.clamp(0, (mtlsResult.stdout as String).trim().length))}');
+              } else {
+                appLogger.error('mTLS-TEST', 'curl mTLS → exit ${mtlsResult.exitCode}: ${(mtlsResult.stderr as String).trim()}');
+              }
+              // Cleanup
+              try { await certFile.delete(); } catch (_) {}
+              try { await keyFile.delete(); } catch (_) {}
+              try { await caFile.delete(); } catch (_) {}
+            }
+          }
+        }
+      } catch (e) {
+        appLogger.warn('mTLS-TEST', 'Test eșuat: $e');
+      }
+
       // Check if wireguard-go process is running
       final psResult = await Process.run(
         '/bin/ps', <String>['-ax', '-o', 'pid,comm'],
