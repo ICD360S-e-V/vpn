@@ -454,36 +454,6 @@ class VpnTunnel {
     return 'pfctl -a $anchor -F all 2>/dev/null || true';
   }
 
-  ///   - Force DNS to VPN's AdGuard Home (10.8.0.1)
-  ///   - Disable IPv6 to prevent leaking ISP's v6 address
-  ///   - Flush DNS cache so stale entries don't leak
-  static String _macosLeakProtectionUp() {
-    const dns = '10.8.0.1';
-    const services = <String>['Wi-Fi', 'Ethernet', 'USB 10/100/1000 LAN'];
-    final cmds = <String>[];
-    for (final svc in services) {
-      cmds.add("networksetup -setdnsservers '$svc' $dns 2>/dev/null || true");
-      cmds.add("networksetup -setv6off '$svc' 2>/dev/null || true");
-    }
-    cmds.add('dscacheutil -flushcache 2>/dev/null || true');
-    cmds.add('killall -HUP mDNSResponder 2>/dev/null || true');
-    return cmds.join(' && ');
-  }
-
-  /// Restore DNS to DHCP defaults and re-enable IPv6.
-  static String _macosLeakProtectionDown() {
-    const services = <String>['Wi-Fi', 'Ethernet', 'USB 10/100/1000 LAN'];
-    final cmds = <String>[];
-    for (final svc in services) {
-      cmds.add("networksetup -setdnsservers '$svc' empty 2>/dev/null || true");
-      cmds.add(
-          "networksetup -setv6automatic '$svc' 2>/dev/null || true");
-    }
-    cmds.add('dscacheutil -flushcache 2>/dev/null || true');
-    cmds.add('killall -HUP mDNSResponder 2>/dev/null || true');
-    return cmds.join(' && ');
-  }
-
   /// Probes whether a WireGuard tunnel is currently up by looking for
   /// our interface name in `wg show interfaces`. Returns
   /// [VpnTunnelStatus.connected] / [VpnTunnelStatus.disconnected].
