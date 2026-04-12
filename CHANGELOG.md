@@ -19,6 +19,50 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.4.0](https://github.com/ICD360S-e-V/vpn/compare/v1.3.1...v1.4.0) (2026-04-12)
+
+
+### Features
+
+* 4-box short-code enrollment + Connect to VPN button (M7.2, M7.4) ([431b601](https://github.com/ICD360S-e-V/vpn/commit/431b60118a309ab8305176c35ce417b1fff3450a))
+* add API request/error logging to debug console ([74cb747](https://github.com/ICD360S-e-V/vpn/commit/74cb7478c3cf8530695013757eaa407686916940))
+* add collapsible debug console widget ([45b340e](https://github.com/ICD360S-e-V/vpn/commit/45b340ea2673dc9c74bd265eddaefa575ad8bf3e))
+* add connection diagnostics (IP, DNS, IPv6 leak detection) ([55a4f59](https://github.com/ICD360S-e-V/vpn/commit/55a4f59a73d07edc9a6deef91b6ea80115824405))
+* add Connection diagnostics screen ([694d621](https://github.com/ICD360S-e-V/vpn/commit/694d6211f97b6b852710899283a5523111705d9f))
+* add Connection tab, debug console, and VPN logging ([9067f1f](https://github.com/ICD360S-e-V/vpn/commit/9067f1f8dcedcacfc4b31006856a0dad018f9959))
+* add in-app debug console logger ([3f6c147](https://github.com/ICD360S-e-V/vpn/commit/3f6c147346ec8929f06816d1d704cbb717d312a9))
+* auto-versioning with release-please + in-app release notes viewer (M7.5) ([85a47f0](https://github.com/ICD360S-e-V/vpn/commit/85a47f0682a01810e8bb23ef7262532c97de84f1))
+* **ci:** auto-merge release PR after checks pass ([898d765](https://github.com/ICD360S-e-V/vpn/commit/898d7652882534aef860a07c94839627860d0b9c))
+* DNS/IPv6 leak protection on macOS (ProtonVPN/Mullvad approach) ([7ec938e](https://github.com/ICD360S-e-V/vpn/commit/7ec938ed96a37731ca4d8c704624c6e98fd07f57))
+* real Connect/Disconnect VPN + sidebar logout/dark mode + UX cleanup (v1.2.5) ([4733b40](https://github.com/ICD360S-e-V/vpn/commit/4733b404525cf70d5803d48bad434878a842fb3d))
+
+
+### Bug Fixes
+
+* **ci:** add continue-on-error to auto-merge step ([ea457fe](https://github.com/ICD360S-e-V/vpn/commit/ea457fe56ae6f23c8aec4c3610336a6b86ed6cb2))
+* **ci:** add pull-request-title-pattern to fix component mismatch ([628c7fc](https://github.com/ICD360S-e-V/vpn/commit/628c7fcf510cf96690f19a306f2f38ca8db17ccc))
+* **ci:** add workflow_dispatch trigger, replace deprecated manifest-release ([50bba57](https://github.com/ICD360S-e-V/vpn/commit/50bba577515e01e2c8bd4be26d3c2b14e623800c))
+* **ci:** pin ossf/scorecard-action to v2.4.3 ([af2a080](https://github.com/ICD360S-e-V/vpn/commit/af2a080ff61a4b56df06fb90d93363d23304586b))
+* **ci:** remove package-name, set empty component to stop mismatch ([e99ce2d](https://github.com/ICD360S-e-V/vpn/commit/e99ce2d4af2a8ed9b995b876157a432daddcbc49))
+* **ci:** replace deprecated manifest-pr with release-pr ([65418b0](https://github.com/ICD360S-e-V/vpn/commit/65418b0236b08f476c45d4ea216fe7e429ceb6e2))
+* **ci:** tolerate duplicate release tag in github-release step ([b8b4c9a](https://github.com/ICD360S-e-V/vpn/commit/b8b4c9a7d60e9e99b5b4ec4602bd1cd2c74ed1d7))
+* **ci:** use PAT for release-please to bypass enterprise PR restriction ([78ac673](https://github.com/ICD360S-e-V/vpn/commit/78ac673bdb80f11f5e76ce54c7a6825622463f9c))
+* drop flutter_secure_storage + real macOS auto-update + footer button (v1.2.4) ([d71c044](https://github.com/ICD360S-e-V/vpn/commit/d71c04420d94b1e2a215ef4876cfdaf1145453cd))
+* drop macOS sandbox + distinguish invalid/expired/used codes (v1.2.3) ([87ad4c1](https://github.com/ICD360S-e-V/vpn/commit/87ad4c132ab9594ff8130cc5cf2d1093d3afe1fa))
+* drop unused secure_store.dart import in main_shell ([ba30679](https://github.com/ICD360S-e-V/vpn/commit/ba3067968a8fa360fe7a9d80eceb3256d81af164))
+* invoke wg-quick with Homebrew bash on macOS to avoid bash 3.2 shebang ([ee04a12](https://github.com/ICD360S-e-V/vpn/commit/ee04a12e7f2893d16253702e525a201502a73571))
+* macOS network sandbox + UA header + drop alphabet hint (M7.6, v1.2.1) ([249ff6c](https://github.com/ICD360S-e-V/vpn/commit/249ff6c803357863beee0ab5177e47786296ea38))
+* overwrite macOS entitlements with known-good plist (v1.2.2) ([7ccccb0](https://github.com/ICD360S-e-V/vpn/commit/7ccccb06af9b272cac4ca4d765f6e85fbed523eb))
+* restore enrollment_bundle.dart still referenced by app.dart ([c3a4ea5](https://github.com/ICD360S-e-V/vpn/commit/c3a4ea5b9ee948d589cf6b6d695953ba212edea6))
+* silence prefer_const_constructors lints in enrollment screen ([9f75e53](https://github.com/ICD360S-e-V/vpn/commit/9f75e53cb6780985407edd6ebbe29edc6fc4bc41))
+* silence three analyze warnings in v1.2.5 ([18f5a7c](https://github.com/ICD360S-e-V/vpn/commit/18f5a7cc0d6e51f3af44d5ef14eb135ac7f46de9))
+* silence two analyze lints in macos_updater ([8074847](https://github.com/ICD360S-e-V/vpn/commit/807484771cf3998c496dc5900d6d3c49ae7cdad4))
+
+
+### Documentation
+
+* scrub literal credential string from M7.10 changelog entry ([2e6192c](https://github.com/ICD360S-e-V/vpn/commit/2e6192c82dbc65f4eb1f234cc05f0a6ece56df73))
+
 ## [1.3.1](https://github.com/ICD360S-e-V/vpn/compare/v1.3.0...v1.3.1) (2026-04-12)
 
 
