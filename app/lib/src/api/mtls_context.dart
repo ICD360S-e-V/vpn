@@ -65,29 +65,28 @@ Future<SecurityContext> _buildAppleContext(
     await certFile.writeAsString(certPem);
     await keyFile.writeAsString(keyPem);
 
-    // Convert PEM → PKCS12 with empty password.
-    // OpenSSL 3.x needs -legacy flag (SHA1+TripleDES) for macOS
-    // Secure Transport. LibreSSL (macOS built-in) already uses
-    // legacy algorithms by default and doesn't have -legacy flag.
-    // Try with -legacy first, fall back without it.
-    var result = await Process.run('/usr/bin/openssl', <String>[
+    // Detect OpenSSL vs LibreSSL to choose correct flags.
+    // LibreSSL (macOS built-in): already uses SHA1+TripleDES, no -legacy flag
+    // OpenSSL 3.x (Homebrew): needs -legacy -certpbe for Secure Transport
+    final versionResult = await Process.run(
+      '/usr/bin/openssl', <String>['version'],
+    );
+    final versionStr = (versionResult.stdout as String).trim();
+    final isOpenSSL3 = versionStr.startsWith('OpenSSL 3.');
+    appLogger.info('mTLS', 'OpenSSL: $versionStr');
+
+    final args = <String>[
       'pkcs12', '-export',
-      '-legacy',
+      if (isOpenSSL3) ...<String>[
+        '-legacy',
+        '-certpbe', 'pbeWithSHA1And40BitRC2-CBC',
+      ],
       '-in', certFile.path,
       '-inkey', keyFile.path,
       '-out', p12File.path,
       '-passout', 'pass:',
-    ]);
-    if (result.exitCode != 0) {
-      appLogger.info('mTLS', 'openssl -legacy nu e suportat, încerc fără');
-      result = await Process.run('/usr/bin/openssl', <String>[
-        'pkcs12', '-export',
-        '-in', certFile.path,
-        '-inkey', keyFile.path,
-        '-out', p12File.path,
-        '-passout', 'pass:',
-      ]);
-    }
+    ];
+    final result = await Process.run('/usr/bin/openssl', args);
     if (result.exitCode != 0) {
       final err = (result.stderr as String).trim();
       appLogger.error('mTLS', 'openssl pkcs12 eșuat: $err');
