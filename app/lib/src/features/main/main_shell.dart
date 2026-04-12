@@ -74,48 +74,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     }
   }
 
-  Future<bool> _confirmDialog(String message) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Instalare necesară'),
-        content: Text(message),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Anulează'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Instalează'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
-
-  void _showProgressSnack(String message) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(minutes: 5),
-        content: Row(
-          children: <Widget>[
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _toggleVpn() async {
     if (_busy) return;
     setState(() => _busy = true);
