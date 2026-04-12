@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.11.2](https://github.com/ICD360S-e-V/vpn/compare/v1.11.1...v1.11.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* detect WireGuard App via filesystem/Spotlight, not scutil ([f7b0891](https://github.com/ICD360S-e-V/vpn/commit/f7b0891aa79a76e9a752b5681b7c376b9328d12e))
+
 ## [1.11.1](https://github.com/ICD360S-e-V/vpn/compare/v1.11.0...v1.11.1) (2026-04-12)
 
 
