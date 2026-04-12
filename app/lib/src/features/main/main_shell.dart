@@ -29,7 +29,7 @@ import '../../app.dart';
 import '../../common/app_footer.dart';
 import '../../common/log_console.dart';
 import '../connection/connection_screen.dart';
-import '../health/health_screen.dart';
+// Health screen removed — status info is now in the footer.
 import '../peers/peers_screen.dart';
 import '../settings/settings_screen.dart';
 import '../updates/update_available_dialog.dart';
@@ -171,7 +171,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     final pages = <Widget>[
       const ConnectionScreen(),
       PeersScreen(client: widget.client),
-      HealthScreen(client: widget.client),
       const SettingsScreen(),
     ];
 
@@ -250,11 +249,6 @@ class _MainShellState extends ConsumerState<MainShell> {
                       icon: Icon(Icons.people_outline),
                       selectedIcon: Icon(Icons.people),
                       label: Text('Peers'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.favorite_outline),
-                      selectedIcon: Icon(Icons.favorite),
-                      label: Text('Health'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.settings_outlined),
