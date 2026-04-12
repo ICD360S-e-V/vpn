@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../api/app_logger.dart';
 import '../api/update_service.dart';
 import '../api/vpn_tunnel.dart';
 import '../app.dart';
@@ -340,7 +339,7 @@ class _AppFooterState extends ConsumerState<AppFooter> {
           ),
 
           // Uptime
-          if (online && h != null) ...<Widget>[
+          if (online) ...<Widget>[
             const SizedBox(width: 6),
             Text(
               '↑${_formatUptime(h.uptimeSeconds)}',
