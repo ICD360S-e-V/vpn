@@ -28,8 +28,8 @@ import '../../api/vpn_tunnel.dart';
 import '../../app.dart';
 import '../../common/app_footer.dart';
 import '../../common/log_console.dart';
+import '../bandwidth/bandwidth_screen.dart';
 import '../connection/connection_screen.dart';
-// Health screen removed — status info is now in the footer.
 import '../peers/peers_screen.dart';
 import '../settings/settings_screen.dart';
 import '../updates/update_available_dialog.dart';
@@ -171,6 +171,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final pages = <Widget>[
       const ConnectionScreen(),
       PeersScreen(client: widget.client),
+      BandwidthScreen(client: widget.client),
       const SettingsScreen(),
     ];
 
@@ -249,6 +250,11 @@ class _MainShellState extends ConsumerState<MainShell> {
                       icon: Icon(Icons.people_outline),
                       selectedIcon: Icon(Icons.people),
                       label: Text('Peers'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.show_chart_outlined),
+                      selectedIcon: Icon(Icons.show_chart),
+                      label: Text('Trafic'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.settings_outlined),
