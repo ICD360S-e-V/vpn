@@ -438,7 +438,9 @@ class VpnTunnel {
     // -E increases pf reference count (enables pf if needed).
     // Token is saved for clean removal at disconnect.
     cmds.add(
-      "echo 'pass quick on utun all' "
+      // pass utun traffic + block IPv6 on physical interfaces to
+      // prevent leaking ISP IPv6 (server has no IPv6).
+      "printf 'pass quick on utun all\\nblock drop quick inet6 all\\n' "
       // Use -f (load rules) NOT -Ef (enable pf + load).
       // -E enables the macOS packet filter which has a default
       // block-all policy — that kills WireGuard's own encrypted
