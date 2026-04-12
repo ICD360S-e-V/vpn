@@ -1,7 +1,7 @@
 // ICD360SVPN — lib/src/api/app_logger.dart
 //
-// In-app debug console inspired by ProtonVPN/Mullvad's exportable
-// logs. Singleton logger with a ValueNotifier so the footer console
+// In-app debug console with exportable
+// Singleton logger with a ValueNotifier so the footer console
 // widget rebuilds on every new entry. Keeps the last 500 entries.
 
 import 'package:flutter/foundation.dart';
