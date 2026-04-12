@@ -2,8 +2,8 @@
 //
 // Collapsible debug console panel shown above the app footer.
 // Displays timestamped, color-coded log entries from AppLogger.
-// Inspired by ProtonVPN/Mullvad's exportable log feature, but
-// shown inline for instant debugging.
+// Exportable debug log panel
+// shown inline for instant debugging without leaving the app.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
