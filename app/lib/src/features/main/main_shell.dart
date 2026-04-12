@@ -142,53 +142,13 @@ class _MainShellState extends ConsumerState<MainShell> {
           );
           return;
         }
-        // Auto-install wireguard-tools via brew if missing.
-        await VpnTunnel.ensureDependencies(
-          confirm: _confirmDialog,
-          progress: _showProgressSnack,
-        );
-        messenger.hideCurrentSnackBar();
-
-        // Try to refresh WG config from agent (gets latest
-        // AllowedIPs, MTU, DNS, etc. without re-enrollment).
-        var wgConfig = identity.wgConfig;
-        if (identity.wgPublicKey.isNotEmpty) {
-          try {
-            appLogger.info('VPN', 'Actualizare config WG de la agent…');
-            // Extract private key from current config
-            final privKeyMatch = RegExp(r'PrivateKey\s*=\s*(\S+)')
-                .firstMatch(identity.wgConfig);
-            if (privKeyMatch != null) {
-              final newConfig = await widget.client.refreshConfig(
-                publicKey: identity.wgPublicKey,
-                privateKey: privKeyMatch.group(1)!,
-              );
-              if (newConfig != null && newConfig.isNotEmpty) {
-                wgConfig = newConfig;
-                // Save updated config
-                await ref.read(secureStoreProvider).saveIdentity(
-                  certPem: identity.certPem,
-                  keyPem: identity.keyPem,
-                  caPem: identity.caPem,
-                  agentUrl: identity.agentUrl,
-                  identityName: identity.identityName,
-                  wgConfig: newConfig,
-                  wgPublicKey: identity.wgPublicKey,
-                  wgAddress: identity.wgAddress,
-                );
-                appLogger.info('VPN', 'Config WG actualizat de la agent');
-              }
-            }
-          } catch (e) {
-            appLogger.warn('VPN', 'Config refresh eșuat (folosesc config local): $e');
-          }
-        }
-
-        await VpnTunnel.connect(wgConfig: wgConfig);
+        // Check WireGuard App is installed (macOS) or wg-quick (Linux)
+        await VpnTunnel.ensureDependencies();
+        await VpnTunnel.connect(wgConfig: identity.wgConfig);
         messenger.showSnackBar(
           const SnackBar(
             duration: Duration(seconds: 3),
-            content: Text('VPN conectat. Acum poți încărca Peers și Health.'),
+            content: Text('VPN conectat.'),
           ),
         );
       }
