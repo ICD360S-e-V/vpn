@@ -165,9 +165,9 @@ class VpnTunnel {
 
     appLogger.info('VPN', 'Pornire tunel WireGuard…');
     if (Platform.isMacOS) {
-      // Leak protection: disable IPv6 + force DNS through VPN
-      // in the same admin session as wg-quick up. Inspired by
-      // ProtonVPN/Mullvad's system-wide kill-switch approach.
+      // Leak protection: disable IPv6 + force DNS through VPN.
+      // All commands run in the same admin session as wg-quick up
+      // for reliable system-wide DNS and IPv6 leak prevention.
       final leakFixUp = _macosLeakProtectionUp();
       await _runWithMacosAdmin(<String>[wgQuick, 'up', confPath]);
       appLogger.info('VPN', 'wg-quick up reușit');
@@ -227,7 +227,7 @@ class VpnTunnel {
   /// Runs as admin via osascript. Covers Wi-Fi + Ethernet + USB
   /// (the three common macOS network services).
   ///
-  /// Approach modeled after ProtonVPN and Mullvad:
+  /// Leak prevention approach:
   ///   - Force DNS to VPN's AdGuard Home (10.8.0.1)
   ///   - Disable IPv6 to prevent leaking ISP's v6 address
   ///   - Flush DNS cache so stale entries don't leak
