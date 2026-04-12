@@ -7,6 +7,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../api/app_logger.dart';
+import '../../api/vpn_tunnel.dart';
 import '../../common/needs_vpn_view.dart';
 import '../../common/status_badge.dart';
 import '../../models/api_error.dart';
@@ -43,6 +45,17 @@ class _HealthScreenState extends State<HealthScreen> {
 
   Future<void> _fetch() async {
     if (_fetching) return;
+    // Check VPN status first — show "connect to VPN" instantly
+    // instead of waiting 10s for a timeout.
+    final vpnStatus = await VpnTunnel.status();
+    if (vpnStatus != VpnTunnelStatus.connected) {
+      if (!mounted) return;
+      setState(() {
+        _needsVpn = true;
+        _fetching = false;
+      });
+      return;
+    }
     setState(() => _fetching = true);
     try {
       final h = await widget.client.health();
@@ -54,6 +67,7 @@ class _HealthScreenState extends State<HealthScreen> {
       });
     } on ApiError catch (e) {
       if (!mounted) return;
+      appLogger.warn('HEALTH', 'Eroare: ${e.message}');
       setState(() {
         _needsVpn = e.kind == ApiErrorKind.transport;
         _error = _needsVpn ? null : e.message;
