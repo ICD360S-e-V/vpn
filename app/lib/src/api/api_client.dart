@@ -72,6 +72,24 @@ class ApiClient {
   // Endpoints
   // ---------------------------------------------------------------
 
+  /// Ask the agent for an updated WireGuard .conf using the client's
+  /// existing keys. Returns the new config string, or null if the
+  /// peer was not found.
+  Future<String?> refreshConfig({
+    required String publicKey,
+    required String privateKey,
+  }) async {
+    final json = await _request<Map<String, dynamic>>(
+      'POST',
+      '/v1/config/refresh',
+      body: <String, dynamic>{
+        'public_key': publicKey,
+        'private_key': privateKey,
+      },
+    );
+    return json['wireguard_config'] as String?;
+  }
+
   Future<Health> health() async {
     final json = await _request<Map<String, dynamic>>('GET', '/v1/health');
     return Health.fromJson(json);
