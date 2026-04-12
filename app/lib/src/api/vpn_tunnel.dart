@@ -165,6 +165,19 @@ class VpnTunnel {
 
     appLogger.info('VPN', 'Pornire tunel WireGuard…');
     if (Platform.isMacOS) {
+      // Allow wireguard-go through macOS Application Firewall.
+      // Without this, the firewall silently blocks all traffic on
+      // the utun interface — handshake works but 0 data flows.
+      try {
+        final firewallFix = _macosFirewallAllow();
+        await _runWithMacosAdmin(
+          <String>['/bin/sh', '-c', firewallFix],
+        );
+        appLogger.info('FW', 'wireguard-go permis prin macOS Firewall');
+      } catch (e) {
+        appLogger.warn('FW', 'Nu am putut configura firewall: $e');
+      }
+
       // Leak protection: disable IPv6 + force DNS through VPN.
       // All commands run in the same admin session as wg-quick up
       // for reliable system-wide DNS and IPv6 leak prevention.
@@ -281,6 +294,24 @@ class VpnTunnel {
   /// (the three common macOS network services).
   ///
   /// Leak prevention approach:
+  /// Allow wireguard-go through macOS Application Firewall.
+  /// Checks both Apple Silicon and Intel Homebrew paths.
+  static String _macosFirewallAllow() {
+    const sfw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
+    const candidates = <String>[
+      '/opt/homebrew/bin/wireguard-go',
+      '/usr/local/bin/wireguard-go',
+      '/opt/local/bin/wireguard-go',
+    ];
+    final cmds = <String>[];
+    for (final path in candidates) {
+      // --add is idempotent (no error if already added)
+      cmds.add('$sfw --add $path 2>/dev/null || true');
+      cmds.add('$sfw --unblockapp $path 2>/dev/null || true');
+    }
+    return cmds.join(' && ');
+  }
+
   ///   - Force DNS to VPN's AdGuard Home (10.8.0.1)
   ///   - Disable IPv6 to prevent leaking ISP's v6 address
   ///   - Flush DNS cache so stale entries don't leak
