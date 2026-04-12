@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.9](https://github.com/ICD360S-e-V/vpn/compare/v1.10.8...v1.10.9) (2026-04-12)
+
+
+### Bug Fixes
+
+* detect OpenSSL version for PKCS12 legacy flag ([7c5a218](https://github.com/ICD360S-e-V/vpn/commit/7c5a2181f5017163bb13a37e60effe08e4fb0e51))
+
 ## [1.10.8](https://github.com/ICD360S-e-V/vpn/compare/v1.10.7...v1.10.8) (2026-04-12)
 
 
