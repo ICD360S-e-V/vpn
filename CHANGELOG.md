@@ -19,6 +19,18 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.8.0](https://github.com/ICD360S-e-V/vpn/compare/v1.7.1...v1.8.0) (2026-04-12)
+
+
+### Features
+
+* add curl-based mTLS test in diagnostics ([4492dad](https://github.com/ICD360S-e-V/vpn/commit/4492dad2d78f774a0796b7654186eb3fc83ccad0))
+
+
+### Bug Fixes
+
+* add logging to mTLS SecurityContext creation ([9e50477](https://github.com/ICD360S-e-V/vpn/commit/9e50477798e7fff20dbf774ad89489b617eab8e1))
+
 ## [1.7.1](https://github.com/ICD360S-e-V/vpn/compare/v1.7.0...v1.7.1) (2026-04-12)
 
 
