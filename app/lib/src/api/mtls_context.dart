@@ -1,8 +1,15 @@
 // ICD360SVPN — lib/src/api/mtls_context.dart
 //
-// Builds a dart:io SecurityContext that:
-//   1. Trusts ONLY the agent's private CA (not the system trust store).
-//   2. Presents a client cert + key for the mTLS challenge.
+// Builds a dart:io SecurityContext for mTLS with the vpn-agent.
+//
+// On macOS/iOS, dart:io's Secure Transport backend requires PKCS12
+// for client certificates — PEM cert + PEM key loaded separately
+// via useCertificateChainBytes / usePrivateKeyBytes silently fails
+// to present the client cert during TLS handshake (known issue:
+// https://github.com/dart-lang/http/issues/1277).
+//
+// Fix: convert PEM cert + key to PKCS12 via `openssl pkcs12` and
+// load the combined bundle with usePrivateKeyBytes on Apple platforms.
 
 import 'dart:convert';
 import 'dart:io';
@@ -11,24 +18,82 @@ import 'app_logger.dart';
 
 /// Build a SecurityContext from PEM strings.
 ///
-/// Throws if any of the PEMs are malformed or if dart:io rejects them.
-SecurityContext buildMtlsContext({
+/// On macOS/iOS, converts cert+key to PKCS12 first because Secure
+/// Transport ignores PEM-loaded client certificates.
+Future<SecurityContext> buildMtlsContext({
   required String certPem,
   required String keyPem,
   required String caPem,
-}) {
+}) async {
+  appLogger.info('mTLS', 'Building SecurityContext (${Platform.operatingSystem})');
+  appLogger.info('mTLS', 'CA: ${caPem.length}b, Cert: ${certPem.length}b, Key: ${keyPem.length}b');
+
   try {
-    final ctx = SecurityContext()
-      ..setTrustedCertificatesBytes(utf8.encode(caPem))
-      ..useCertificateChainBytes(utf8.encode(certPem))
-      ..usePrivateKeyBytes(utf8.encode(keyPem));
-    appLogger.info('mTLS', 'SecurityContext creat cu succes');
-    appLogger.info('mTLS', 'CA: ${caPem.length} bytes, Cert: ${certPem.length} bytes, Key: ${keyPem.length} bytes');
-    return ctx;
+    if (Platform.isMacOS || Platform.isIOS) {
+      return await _buildAppleContext(certPem, keyPem, caPem);
+    }
+    return _buildStandardContext(certPem, keyPem, caPem);
   } catch (e) {
     appLogger.error('mTLS', 'SecurityContext EȘUAT: $e');
-    appLogger.error('mTLS', 'CA starts: ${caPem.substring(0, 30.clamp(0, caPem.length))}...');
-    appLogger.error('mTLS', 'Cert starts: ${certPem.substring(0, 30.clamp(0, certPem.length))}...');
     rethrow;
+  }
+}
+
+/// Standard PEM-based context for Linux/Windows/Android.
+SecurityContext _buildStandardContext(
+    String certPem, String keyPem, String caPem) {
+  final ctx = SecurityContext()
+    ..setTrustedCertificatesBytes(utf8.encode(caPem))
+    ..useCertificateChainBytes(utf8.encode(certPem))
+    ..usePrivateKeyBytes(utf8.encode(keyPem));
+  appLogger.info('mTLS', 'SecurityContext creat (PEM standard)');
+  return ctx;
+}
+
+/// Apple platforms: convert PEM → PKCS12, then load the p12 bundle.
+/// This is the only way to make Secure Transport present the client
+/// certificate during TLS handshake.
+Future<SecurityContext> _buildAppleContext(
+    String certPem, String keyPem, String caPem) async {
+  // Write PEM files to temp dir
+  final tmpDir = await Directory.systemTemp.createTemp('mtls_');
+  final certFile = File('${tmpDir.path}/cert.pem');
+  final keyFile = File('${tmpDir.path}/key.pem');
+  final p12File = File('${tmpDir.path}/client.p12');
+
+  try {
+    await certFile.writeAsString(certPem);
+    await keyFile.writeAsString(keyPem);
+
+    // Convert PEM → PKCS12 with empty password.
+    // openssl pkcs12 -export -in cert.pem -inkey key.pem -out client.p12 -passout pass:
+    final result = await Process.run('/usr/bin/openssl', <String>[
+      'pkcs12', '-export',
+      '-in', certFile.path,
+      '-inkey', keyFile.path,
+      '-out', p12File.path,
+      '-passout', 'pass:',
+    ]);
+    if (result.exitCode != 0) {
+      final err = (result.stderr as String).trim();
+      appLogger.error('mTLS', 'openssl pkcs12 eșuat: $err');
+      throw Exception('PKCS12 conversion failed: $err');
+    }
+
+    final p12Bytes = await p12File.readAsBytes();
+    appLogger.info('mTLS', 'PKCS12 generat: ${p12Bytes.length} bytes');
+
+    final ctx = SecurityContext()
+      ..setTrustedCertificatesBytes(utf8.encode(caPem))
+      ..useCertificateChainBytes(p12Bytes, password: '')
+      ..usePrivateKeyBytes(p12Bytes, password: '');
+    appLogger.info('mTLS', 'SecurityContext creat (PKCS12 Apple)');
+    return ctx;
+  } finally {
+    // Cleanup temp files
+    try { await certFile.delete(); } catch (_) {}
+    try { await keyFile.delete(); } catch (_) {}
+    try { await p12File.delete(); } catch (_) {}
+    try { await tmpDir.delete(); } catch (_) {}
   }
 }
