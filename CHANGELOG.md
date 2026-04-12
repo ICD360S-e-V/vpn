@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.12.0](https://github.com/ICD360S-e-V/vpn/compare/v1.11.3...v1.12.0) (2026-04-12)
+
+
+### Features
+
+* use curl for mTLS API calls on macOS (dart:io bug workaround) ([3de4510](https://github.com/ICD360S-e-V/vpn/commit/3de4510c17bb1f98f76ad39b7286916d8c8b15d5))
+
 ## [1.11.3](https://github.com/ICD360S-e-V/vpn/compare/v1.11.2...v1.11.3) (2026-04-12)
 
 
