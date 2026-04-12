@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.13.0](https://github.com/ICD360S-e-V/vpn/compare/v1.12.0...v1.13.0) (2026-04-12)
+
+
+### Features
+
+* redesign footer with service status, uptime, server clock ([21ae9e0](https://github.com/ICD360S-e-V/vpn/commit/21ae9e01cc38c29a6f487fed2d8231ed3c108b7b))
+* remove Health tab — status info moved to footer ([8b4c2f2](https://github.com/ICD360S-e-V/vpn/commit/8b4c2f2c5226abfce361c2085e8455ac838b778b))
+
 ## [1.12.0](https://github.com/ICD360S-e-V/vpn/compare/v1.11.3...v1.12.0) (2026-04-12)
 
 
