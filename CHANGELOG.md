@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.14.2](https://github.com/ICD360S-e-V/vpn/compare/v1.14.1...v1.14.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* use api64.ipify.org without -4 flag for IP detection ([2d37d8e](https://github.com/ICD360S-e-V/vpn/commit/2d37d8eec834557381336ca5dfaf55d79ba35b13))
+
 ## [1.14.1](https://github.com/ICD360S-e-V/vpn/compare/v1.14.0...v1.14.1) (2026-04-12)
 
 
