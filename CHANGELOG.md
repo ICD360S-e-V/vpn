@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.10.6](https://github.com/ICD360S-e-V/vpn/compare/v1.10.5...v1.10.6) (2026-04-12)
+
+
+### Bug Fixes
+
+* use openssl pkcs12 -legacy for macOS Secure Transport ([423c3f5](https://github.com/ICD360S-e-V/vpn/commit/423c3f58836559dc711757dd7e8236bbbde0f75b))
+
 ## [1.10.5](https://github.com/ICD360S-e-V/vpn/compare/v1.10.4...v1.10.5) (2026-04-12)
 
 
