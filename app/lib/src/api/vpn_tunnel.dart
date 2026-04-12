@@ -258,6 +258,35 @@ class VpnTunnel {
         appLogger.error('PING', '10.8.0.1 — EȘUAT (exit ${pingResult.exitCode})');
       }
 
+      // Test DNS resolution through tunnel
+      final digResult = await Process.run(
+        '/usr/bin/dig', <String>['@10.8.0.1', 'google.com', '+short', '+timeout=3'],
+      ).timeout(const Duration(seconds: 5), onTimeout: () =>
+        ProcessResult(0, 1, '', 'timeout'));
+      if (digResult.exitCode == 0 && (digResult.stdout as String).trim().isNotEmpty) {
+        appLogger.info('DNS-TEST', 'dig @10.8.0.1 google.com → ${(digResult.stdout as String).trim().split('\n').first}');
+      } else {
+        appLogger.error('DNS-TEST', 'dig @10.8.0.1 eșuat (exit ${digResult.exitCode})');
+      }
+
+      // Test curl through tunnel
+      final curlResult = await Process.run(
+        '/usr/bin/curl', <String>['-s', '--connect-timeout', '5', '-4', 'http://10.8.0.1:3000'],
+      ).timeout(const Duration(seconds: 8), onTimeout: () =>
+        ProcessResult(0, 1, '', 'timeout'));
+      appLogger.info('CURL-TEST', 'curl http://10.8.0.1:3000 → exit ${curlResult.exitCode}');
+
+      // Test TCP connectivity to agent
+      final ncResult = await Process.run(
+        '/usr/bin/nc', <String>['-z', '-w', '3', '10.8.0.1', '8443'],
+      ).timeout(const Duration(seconds: 5), onTimeout: () =>
+        ProcessResult(0, 1, '', 'timeout'));
+      if (ncResult.exitCode == 0) {
+        appLogger.info('TCP-TEST', 'nc 10.8.0.1:8443 → DESCHIS');
+      } else {
+        appLogger.error('TCP-TEST', 'nc 10.8.0.1:8443 → ÎNCHIS/timeout (exit ${ncResult.exitCode})');
+      }
+
       // Check if wireguard-go process is running
       final psResult = await Process.run(
         '/bin/ps', <String>['-ax', '-o', 'pid,comm'],
