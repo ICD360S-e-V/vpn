@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.28.1](https://github.com/ICD360S-e-V/vpn/compare/v1.28.0...v1.28.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* cast dynamic stats values to num for comparison ([f65e168](https://github.com/ICD360S-e-V/vpn/commit/f65e168bec5d98c515846937a7d8087bdf02a971))
+* remove duplicate methods from _StatusDot class ([7f46df4](https://github.com/ICD360S-e-V/vpn/commit/7f46df4196dfb4bbb585e8e0861b5a92a343fa1a))
+
 ## [1.28.0](https://github.com/ICD360S-e-V/vpn/compare/v1.27.2...v1.28.0) (2026-04-13)
 
 
