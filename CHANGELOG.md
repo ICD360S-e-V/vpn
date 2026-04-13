@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.26.0](https://github.com/ICD360S-e-V/vpn/compare/v1.25.0...v1.26.0) (2026-04-13)
+
+
+### Features
+
+* add connection history link in Settings ([2cac720](https://github.com/ICD360S-e-V/vpn/commit/2cac720beacf5310bce4453c1549196bb38bd775))
+* record VPN connect/disconnect events to history ([e546a83](https://github.com/ICD360S-e-V/vpn/commit/e546a83cc123432980f781de5e38be39f63b52c7))
+
 ## [1.25.0](https://github.com/ICD360S-e-V/vpn/compare/v1.24.0...v1.25.0) (2026-04-13)
 
 
