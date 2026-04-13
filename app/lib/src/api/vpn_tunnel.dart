@@ -287,47 +287,45 @@ ${_buildOnDemandRules(killSwitch: killSwitch, autoConnect: autoConnect)}
   }
 
   /// Build OnDemandRules XML fragment based on user preferences.
-  /// - killSwitch: block traffic when VPN disconnects (Disconnect action)
-  /// - autoConnect: reconnect automatically on any network change
+  ///
+  /// - killSwitch + autoConnect: Always-on VPN. OnDemandRules with
+  ///   Connect action on all interfaces ensures macOS reconnects
+  ///   immediately when the tunnel drops. This is the closest to a
+  ///   "kill switch" achievable without MDM/IncludeAllNetworks.
+  ///   Note: true traffic-blocking kill switch requires supervised
+  ///   mode with IncludeAllNetworks=true, which is MDM-only.
+  /// - autoConnect only: same Connect rules, reconnects on any network.
+  /// - killSwitch only: Connect rules (forces reconnect = best effort).
+  /// - neither: OnDemandEnabled=0, manual connect/disconnect.
   static String _buildOnDemandRules({
     required bool killSwitch,
     required bool autoConnect,
   }) {
     if (!killSwitch && !autoConnect) {
-      // No on-demand rules — user connects/disconnects manually
       return '\t\t\t<key>OnDemandEnabled</key>\n\t\t\t<integer>0</integer>';
     }
 
-    final action = autoConnect ? 'Connect' : 'Ignore';
     final buf = StringBuffer();
     buf.writeln('\t\t\t<key>OnDemandEnabled</key>');
     buf.writeln('\t\t\t<integer>1</integer>');
     buf.writeln('\t\t\t<key>OnDemandRules</key>');
     buf.writeln('\t\t\t<array>');
 
-    // Rule per interface type
-    for (final iface in <String>['WiFi', 'Cellular', 'Ethernet']) {
+    // Connect on WiFi and Cellular (Apple-documented interface types)
+    for (final iface in <String>['WiFi', 'Cellular']) {
       buf.writeln('\t\t\t\t<dict>');
       buf.writeln('\t\t\t\t\t<key>Action</key>');
-      buf.writeln('\t\t\t\t\t<string>$action</string>');
+      buf.writeln('\t\t\t\t\t<string>Connect</string>');
       buf.writeln('\t\t\t\t\t<key>InterfaceTypeMatch</key>');
       buf.writeln('\t\t\t\t\t<string>$iface</string>');
       buf.writeln('\t\t\t\t</dict>');
     }
 
-    // Default rule (catch-all)
+    // Catch-all: Connect on any other interface (Ethernet, etc.)
     buf.writeln('\t\t\t\t<dict>');
     buf.writeln('\t\t\t\t\t<key>Action</key>');
-    buf.writeln('\t\t\t\t\t<string>$action</string>');
+    buf.writeln('\t\t\t\t\t<string>Connect</string>');
     buf.writeln('\t\t\t\t</dict>');
-
-    if (killSwitch) {
-      // Disconnect action: if VPN drops, block all traffic
-      buf.writeln('\t\t\t\t<dict>');
-      buf.writeln('\t\t\t\t\t<key>Action</key>');
-      buf.writeln('\t\t\t\t\t<string>Connect</string>');
-      buf.writeln('\t\t\t\t</dict>');
-    }
 
     buf.write('\t\t\t</array>');
     return buf.toString();
