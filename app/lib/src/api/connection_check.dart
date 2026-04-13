@@ -107,7 +107,7 @@ class ConnectionCheck {
     final endpoints = ipv6
         ? <String>['https://api6.ipify.org', 'https://v6.ident.me']
         : <String>[
-            'https://api64.ipify.org',
+            'https://api4.ipify.org',
             'https://ifconfig.me/ip',
             'https://icanhazip.com',
             'https://ident.me',
@@ -140,6 +140,7 @@ class ConnectionCheck {
       return const IpInfo(ip: 'eroare');
     }
     if (ipv6 && !ip.contains(':')) return const IpInfo(ip: 'nu');
+    if (!ipv6 && ip.contains(':')) return const IpInfo(ip: 'eroare');
 
     // Look up ISP + hostname
     final info = await _lookupIpInfo(ip);
