@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.27.1](https://github.com/ICD360S-e-V/vpn/compare/v1.27.0...v1.27.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* const for tmpFile path (prefer_const_declarations) ([c8602c4](https://github.com/ICD360S-e-V/vpn/commit/c8602c469029e595a8c1a42e78a2ad8f6143f407))
+
 ## [1.27.0](https://github.com/ICD360S-e-V/vpn/compare/v1.26.2...v1.27.0) (2026-04-13)
 
 
