@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.27.2](https://github.com/ICD360S-e-V/vpn/compare/v1.27.1...v1.27.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* connect() forwards killSwitch/autoConnect to installProfile ([2d3f63b](https://github.com/ICD360S-e-V/vpn/commit/2d3f63bb70129b4694d9d89cdb2a853c3dd29da1))
+* DNS log filter values — blocked and whitelisted ([82e047e](https://github.com/ICD360S-e-V/vpn/commit/82e047ef99a5d3466a55e4093ec88ab8a582adc5))
+* IPv4 detection uses api4.ipify.org instead of dual-stack api64 ([d6690ea](https://github.com/ICD360S-e-V/vpn/commit/d6690eaa02296217ace02bae1d590181f26eef05))
+
 ## [1.27.1](https://github.com/ICD360S-e-V/vpn/compare/v1.27.0...v1.27.1) (2026-04-13)
 
 
