@@ -307,6 +307,35 @@ jobs:
           channel: stable
       - uses: ./.github/actions/set-build-number
       - run: flutter create --platforms=android --project-name icd360svpn --org de.icd360s .
+
+      - name: Enable core library desugaring for flutter_local_notifications
+        # flutter_local_notifications v18+ requires desugaring on Android.
+        # Since we use `flutter create` in CI (no android/ in repo), we
+        # patch the generated build.gradle.kts after creation.
+        run: |
+          set -e
+          GRADLE="android/app/build.gradle.kts"
+          if [ ! -f "$GRADLE" ]; then
+            GRADLE="android/app/build.gradle"
+          fi
+          echo "Patching $GRADLE for core library desugaring..."
+
+          # Add isCoreLibraryDesugaringEnabled and bump compileSdk
+          sed -i 's/compileSdk = .*/compileSdk = 35/' "$GRADLE"
+
+          # Add compileOptions block with desugaring if not present
+          if ! grep -q 'isCoreLibraryDesugaringEnabled' "$GRADLE"; then
+            sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$GRADLE"
+          fi
+
+          # Add desugar dependency if not present
+          if ! grep -q 'desugar_jdk_libs' "$GRADLE"; then
+            sed -i '/dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' "$GRADLE"
+          fi
+
+          echo "--- Patched $GRADLE ---"
+          cat "$GRADLE"
+
       - run: flutter pub get
 
       # The app uses zero proprietary Google services so the same
