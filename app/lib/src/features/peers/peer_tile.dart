@@ -10,7 +10,7 @@ enum DeviceType { macos, ios, android, windows, linux, unknown }
 
 DeviceType detectDevice(String name) {
   final lower = name.toLowerCase();
-  if (lower.contains('mac') || lower.contains('macbook') || lower.contains('imac')) {
+  if (lower.contains('macbook') || lower.contains('imac') || lower.contains('macos') || lower.contains('macpro') || lower.contains('macmini')) {
     return DeviceType.macos;
   }
   if (lower.contains('iphone') || lower.contains('ipad') || lower.contains('ios')) {
@@ -20,7 +20,7 @@ DeviceType detectDevice(String name) {
       lower.contains('galaxy') || lower.contains('oneplus') || lower.contains('xiaomi')) {
     return DeviceType.android;
   }
-  if (lower.contains('windows') || lower.contains('win') || lower.contains('surface')) {
+  if (lower.contains('windows') || lower.contains('surface')) {
     return DeviceType.windows;
   }
   if (lower.contains('linux') || lower.contains('ubuntu') || lower.contains('debian') ||
@@ -29,11 +29,11 @@ DeviceType detectDevice(String name) {
   }
   // Check for common device types
   if (lower.contains('phone') || lower.contains('mobile') || lower.contains('handy')) {
-    return DeviceType.ios; // default mobile icon
+    return DeviceType.unknown;
   }
   if (lower.contains('laptop') || lower.contains('notebook') || lower.contains('desktop') ||
       lower.contains('pc') || lower.contains('workstation')) {
-    return DeviceType.windows; // default computer icon
+    return DeviceType.unknown;
   }
   return DeviceType.unknown;
 }
