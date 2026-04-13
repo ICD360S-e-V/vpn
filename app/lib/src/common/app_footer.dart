@@ -110,8 +110,10 @@ class _AppFooterState extends ConsumerState<AppFooter> {
       if (_knownPeerKeys.isNotEmpty && ref.read(notifyPeersProvider)) {
         final newlyConnected = currentLiveKeys.difference(_knownPeerKeys);
         for (final key in newlyConnected) {
-          final peer = peers.firstWhere((p) => p.publicKey == key);
-          unawaited(NotificationService.instance.peerConnected(peer.name));
+          final matches = peers.where((p) => p.publicKey == key);
+          if (matches.isNotEmpty) {
+            unawaited(NotificationService.instance.peerConnected(matches.first.name));
+          }
         }
         final newlyDisconnected = _knownPeerKeys.difference(currentLiveKeys);
         for (final key in newlyDisconnected) {
