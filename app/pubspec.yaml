@@ -40,6 +40,9 @@ dependencies:
   # Locate ~/Downloads so the auto-updater can drop the DMG there.
   path_provider: ^2.1.5
 
+  # System notifications for VPN status changes and peer events.
+  flutter_local_notifications: ^18.0.0
+
   # Crypto for SHA256 verification of the downloaded DMG before we
   # ask Finder to open it.
   crypto: ^3.0.6

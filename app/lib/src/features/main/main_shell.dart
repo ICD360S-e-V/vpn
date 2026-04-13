@@ -1,19 +1,16 @@
 // ICD360SVPN — lib/src/features/main/main_shell.dart
 //
 // NavigationRail-based shell for the connected state. Sidebar holds
-// the page destinations (Peers / Health / Settings) plus persistent
-// trailing actions: dark-mode toggle and Logout. The detail area is
-// on the right, the project footer is pinned to the bottom of every
-// screen, and a Connect/Disconnect-to-VPN floating action button
-// hovers above the footer (custom location so it never overlaps).
+// the page destinations (Status / Peers / Trafic / AdGuard / Settings)
+// plus persistent trailing actions: dark-mode toggle and Logout. The
+// detail area is on the right, the project footer is pinned to the
+// bottom of every screen, and a Connect/Disconnect-to-VPN floating
+// action button hovers above the footer.
 //
-// The Connect button performs a REAL `wg-quick up` via osascript with
-// administrator privileges (M7.9). No more "save .conf to Documents
-// and pray". Disconnect runs `wg-quick down` symmetrically.
-//
-// Also hosts the auto-update banner: when UpdateNotifier surfaces a
-// new version we drop in a one-line MaterialBanner above the detail
-// area inviting the user to open the install dialog.
+// Notifications: when the VPN tunnel status changes (connected →
+// disconnected or vice-versa), a system notification is shown via
+// flutter_local_notifications so the user knows even if the app is
+// in the background.
 
 import 'dart:async';
 
@@ -23,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../api/api_client.dart';
 import '../../api/app_logger.dart';
 import '../../api/app_prefs.dart';
+import '../../api/notification_service.dart';
 import '../../api/update_service.dart';
 import '../../api/vpn_tunnel.dart';
 import '../../app.dart';
@@ -49,10 +47,12 @@ class _MainShellState extends ConsumerState<MainShell> {
   bool _busy = false;
   VpnTunnelStatus _tunnelStatus = VpnTunnelStatus.unknown;
   Timer? _statusTimer;
+  bool _userInitiatedToggle = false;
 
   @override
   void initState() {
     super.initState();
+    unawaited(NotificationService.instance.init());
     unawaited(_pollStatus());
     _statusTimer = Timer.periodic(
       const Duration(seconds: 5),
@@ -70,14 +70,29 @@ class _MainShellState extends ConsumerState<MainShell> {
     final s = await VpnTunnel.status();
     if (!mounted) return;
     if (s != _tunnelStatus) {
+      final prev = _tunnelStatus;
       appLogger.info('VPN', 'Status: ${s.name}');
       setState(() => _tunnelStatus = s);
+
+      // Send system notifications on status transitions.
+      // Skip the initial unknown→X transition and user-initiated toggles
+      // (those already show a SnackBar).
+      if (prev != VpnTunnelStatus.unknown && !_userInitiatedToggle) {
+        if (s == VpnTunnelStatus.connected) {
+          unawaited(NotificationService.instance.vpnConnected());
+        } else if (s == VpnTunnelStatus.disconnected &&
+            prev == VpnTunnelStatus.connected) {
+          unawaited(NotificationService.instance.vpnUnexpectedDisconnect());
+        }
+      }
+      _userInitiatedToggle = false;
     }
   }
 
   Future<void> _toggleVpn() async {
     if (_busy) return;
     setState(() => _busy = true);
+    _userInitiatedToggle = true;
     final messenger = ScaffoldMessenger.of(context);
     try {
       if (_tunnelStatus == VpnTunnelStatus.connected) {
@@ -182,9 +197,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     final isConnected = _tunnelStatus == VpnTunnelStatus.connected;
 
     return Scaffold(
-      // Custom location pulls the FAB above the footer (which is ~36px
-      // tall) so it never sits on top of the version label / check
-      // updates button.
       floatingActionButtonLocation: const _AboveFooterFabLocation(
         footerOffset: 52,
       ),
@@ -330,21 +342,17 @@ class _MainShellState extends ConsumerState<MainShell> {
 }
 
 /// Custom FAB location that places the FAB above the footer instead
-/// of overlapping it. The default endFloat / centerFloat assumes the
-/// Scaffold's body extends to the bottom of the screen — our footer
-/// adds extra fixed height that the FAB has no way of knowing about.
+/// of overlapping it.
 class _AboveFooterFabLocation extends FloatingActionButtonLocation {
   const _AboveFooterFabLocation({required this.footerOffset});
 
-  /// Pixels to lift the FAB above the bottom edge of the Scaffold.
-  /// Should be `footer height + desired margin`.
   final double footerOffset;
 
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry s) {
     final fabX = s.scaffoldSize.width -
         s.floatingActionButtonSize.width -
-        16; // right margin
+        16;
     final fabY = s.scaffoldSize.height -
         s.floatingActionButtonSize.height -
         footerOffset;
