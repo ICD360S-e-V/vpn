@@ -328,9 +328,13 @@ jobs:
             sed -i '/compileOptions {/a\        isCoreLibraryDesugaringEnabled = true' "$GRADLE"
           fi
 
-          # Add desugar dependency if not present
+          # Add desugar dependency — append a dependencies block at EOF
+          # (flutter create doesn't generate one in build.gradle.kts)
           if ! grep -q 'desugar_jdk_libs' "$GRADLE"; then
-            sed -i '/dependencies {/a\    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' "$GRADLE"
+            echo '' >> "$GRADLE"
+            echo 'dependencies {' >> "$GRADLE"
+            echo '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' >> "$GRADLE"
+            echo '}' >> "$GRADLE"
           fi
 
           echo "--- Patched $GRADLE ---"
