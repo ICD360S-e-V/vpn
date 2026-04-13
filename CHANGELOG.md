@@ -19,6 +19,16 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.18.0](https://github.com/ICD360S-e-V/vpn/compare/v1.17.0...v1.18.0) (2026-04-13)
+
+
+### Features
+
+* add notification service for VPN and peer events ([64bdc2c](https://github.com/ICD360S-e-V/vpn/commit/64bdc2c2d3193a7595f71c519375c56506f025a0))
+* peer connect/disconnect notifications in footer ([1e35384](https://github.com/ICD360S-e-V/vpn/commit/1e353846ee0869e0cfd6c14b793655d6923f307c))
+* system notifications for VPN and peer events ([baef9dc](https://github.com/ICD360S-e-V/vpn/commit/baef9dce6ffd79ee7eeaa3d9ef386f232d453815))
+* VPN status change notifications in main shell ([4d66781](https://github.com/ICD360S-e-V/vpn/commit/4d66781510798881685b00dc0b9ea8ba0366c17b))
+
 ## [1.17.0](https://github.com/ICD360S-e-V/vpn/compare/v1.16.0...v1.17.0) (2026-04-12)
 
 
