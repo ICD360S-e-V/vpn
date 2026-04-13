@@ -27,6 +27,7 @@ import '../../app.dart';
 import '../../common/app_footer.dart';
 import '../../common/log_console.dart';
 import '../adguard/adguard_screen.dart';
+import '../adguard/dns_log_screen.dart';
 import '../bandwidth/bandwidth_screen.dart';
 import '../connection/connection_screen.dart';
 import '../peers/peers_screen.dart';
@@ -192,6 +193,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       PeersScreen(client: widget.client),
       BandwidthScreen(client: widget.client),
       const AdGuardScreen(),
+      const DnsLogScreen(),
       const SettingsScreen(),
     ];
 
@@ -277,6 +279,11 @@ class _MainShellState extends ConsumerState<MainShell> {
                       icon: Icon(Icons.shield_outlined),
                       selectedIcon: Icon(Icons.shield),
                       label: Text('AdGuard'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.list_alt_outlined),
+                      selectedIcon: Icon(Icons.list_alt),
+                      label: Text('DNS Log'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.settings_outlined),
