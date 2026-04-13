@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.18.2](https://github.com/ICD360S-e-V/vpn/compare/v1.18.1...v1.18.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* add const to Icon constructors in bandwidth screen ([1c13803](https://github.com/ICD360S-e-V/vpn/commit/1c13803e42176738f4be302e4c14b0129e8b2c0b))
+
 ## [1.18.1](https://github.com/ICD360S-e-V/vpn/compare/v1.18.0...v1.18.1) (2026-04-13)
 
 
