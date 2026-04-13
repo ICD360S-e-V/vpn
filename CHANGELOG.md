@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.20.0](https://github.com/ICD360S-e-V/vpn/compare/v1.19.0...v1.20.0) (2026-04-13)
+
+
+### Features
+
+* settings UI for kill switch, auto-connect, notifications ([670bd98](https://github.com/ICD360S-e-V/vpn/commit/670bd982599cfa935015c22f0c7964c85ab22052))
+
 ## [1.19.0](https://github.com/ICD360S-e-V/vpn/compare/v1.18.2...v1.19.0) (2026-04-13)
 
 
