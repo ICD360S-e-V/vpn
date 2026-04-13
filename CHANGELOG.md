@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.23.0](https://github.com/ICD360S-e-V/vpn/compare/v1.22.0...v1.23.0) (2026-04-13)
+
+
+### Features
+
+* add DNS Log tab to NavigationRail ([ba446f0](https://github.com/ICD360S-e-V/vpn/commit/ba446f064bec4408c3095433f580c4d9c570d921))
+
 ## [1.22.0](https://github.com/ICD360S-e-V/vpn/compare/v1.21.3...v1.22.0) (2026-04-13)
 
 
