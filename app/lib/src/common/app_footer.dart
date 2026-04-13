@@ -508,51 +508,6 @@ class _StatusDot extends StatelessWidget {
   final bool online;
   final VoidCallback? onTap;
 
-  IconData _themeIcon(ThemeMode mode) {
-    return switch (mode) {
-      ThemeMode.system => Icons.brightness_auto,
-      ThemeMode.light => Icons.light_mode,
-      ThemeMode.dark => Icons.dark_mode,
-    };
-  }
-
-  String _themeTooltip(ThemeMode mode) {
-    return switch (mode) {
-      ThemeMode.system => 'Temă: System',
-      ThemeMode.light => 'Temă: Light',
-      ThemeMode.dark => 'Temă: Dark',
-    };
-  }
-
-  Future<void> _confirmLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delogare?'),
-        content: const Text(
-          'Vei pierde certificatul stocat și va trebui să faci '
-          'enrollment din nou cu un cod nou.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Anulează'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delogare'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await ref.read(appPhaseProvider.notifier).logout();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
