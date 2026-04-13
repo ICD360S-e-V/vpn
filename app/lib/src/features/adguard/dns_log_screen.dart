@@ -67,7 +67,7 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
         url += '&search=${Uri.encodeComponent(_search)}';
       }
       final responseStatus = switch (_filter) {
-        DnsFilter.blocked => '&response_status=blocked',
+        DnsFilter.blocked => '&response_status=filtered',
         DnsFilter.allowed => '&response_status=processed',
         DnsFilter.all => '',
       };
@@ -103,10 +103,12 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
   }
 
   void _refresh() {
-    _entries.clear();
-    _oldest = null;
-    _hasMore = true;
-    _loadMore();
+    setState(() {
+      _entries.clear();
+      _oldest = null;
+      _hasMore = true;
+    });
+    unawaited(_loadMore());
   }
 
   void _onSearchChanged(String value) {
@@ -131,7 +133,7 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
     final upstream = (entry['upstream'] as String?) ?? '';
     final cached = entry['cached'] == true;
     final time = (entry['time'] as String?) ?? '';
-    final elapsedMs = (entry['elapsed_ms'] as num?)?.toStringAsFixed(1) ?? '?';
+    final elapsedMs = (entry['elapsedMs'] as num?)?.toStringAsFixed(1) ?? '?';
     final answers = entry['answer'] as List<dynamic>? ?? <dynamic>[];
 
     showDialog<void>(
