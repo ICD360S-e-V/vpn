@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.18.1](https://github.com/ICD360S-e-V/vpn/compare/v1.18.0...v1.18.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* cast dynamic to String in AdGuard query name ([843b38c](https://github.com/ICD360S-e-V/vpn/commit/843b38c07f07c780972cac7816841a8c77feab71))
+
 ## [1.18.0](https://github.com/ICD360S-e-V/vpn/compare/v1.17.0...v1.18.0) (2026-04-13)
 
 
