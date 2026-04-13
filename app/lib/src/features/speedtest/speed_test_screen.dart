@@ -141,22 +141,26 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
   Future<double?> _measureUpload() async {
     try {
-      // Generate 1MB of data and POST it
+      // Generate a 1MB temp file for upload measurement
+      final tmpFile = '/tmp/icd360s_speedtest_upload.bin';
+      await Process.run('dd', <String>[
+        'if=/dev/urandom', 'of=$tmpFile', 'bs=1048576', 'count=1',
+      ]);
+
+      // Upload the bounded file and measure speed
       final result = await Process.run('/usr/bin/curl', <String>[
         '-s', '-o', '/dev/null', '--connect-timeout', '10', '--max-time', '30',
         '-X', 'POST',
         '-H', 'Content-Type: application/octet-stream',
-        '--data-binary', '@/dev/urandom',
-        '--limit-rate', '0',
+        '--data-binary', '@$tmpFile',
         '-w', '%{speed_upload}',
-        '--max-filesize', '1048576',
-        'https://vpn.icd360s.de/download/speedtest-1mb.bin',
+        'https://vpn.icd360s.de/',
       ]).timeout(const Duration(seconds: 35));
 
-      if (result.exitCode != 0) {
-        // Upload may not be supported on server — estimate from download
-        return null;
-      }
+      // Clean up
+      try { await File(tmpFile).delete(); } catch (_) {}
+
+      if (result.exitCode != 0) return null;
       final bytesPerSec = double.tryParse((result.stdout as String).trim());
       if (bytesPerSec == null || bytesPerSec == 0) return null;
       return (bytesPerSec * 8) / 1000000;
