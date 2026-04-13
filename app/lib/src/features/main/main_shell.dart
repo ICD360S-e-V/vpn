@@ -134,7 +134,9 @@ class _MainShellState extends ConsumerState<MainShell> {
         }
         // Check WireGuard App is installed (macOS) or wg-quick (Linux)
         await VpnTunnel.ensureDependencies();
-        await VpnTunnel.connect(wgConfig: identity.wgConfig);
+        final ks = ref.read(killSwitchProvider);
+        final ac = ref.read(autoConnectProvider);
+        await VpnTunnel.connect(wgConfig: identity.wgConfig, killSwitch: ks, autoConnect: ac);
         messenger.showSnackBar(
           const SnackBar(
             duration: Duration(seconds: 3),
@@ -169,35 +171,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     }
   }
 
-  Future<void> _confirmLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delogare?'),
-        content: const Text(
-          'Vei pierde certificatul stocat și va trebui să faci '
-          'enrollment din nou cu un cod nou.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Anulează'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delogare'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await ref.read(appPhaseProvider.notifier).logout();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
@@ -211,7 +184,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     ];
 
     final updateInfo = ref.watch(updateNotifierProvider);
-    final themeMode = ref.watch(themeModeProvider);
     final isConnected = _tunnelStatus == VpnTunnelStatus.connected;
 
     return Scaffold(
@@ -309,36 +281,7 @@ class _MainShellState extends ConsumerState<MainShell> {
                       label: Text('Settings'),
                     ),
                   ],
-                  trailing: Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            IconButton(
-                              tooltip: _themeTooltip(themeMode),
-                              icon: Icon(_themeIcon(themeMode)),
-                              onPressed: () => ref
-                                  .read(themeModeProvider.notifier)
-                                  .toggle(),
-                            ),
-                            const SizedBox(height: 8),
-                            IconButton(
-                              tooltip: 'Delogare',
-                              icon: Icon(
-                                Icons.logout,
-                                color:
-                                    Theme.of(context).colorScheme.error,
-                              ),
-                              onPressed: _confirmLogout,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
                 Expanded(child: pages[_selected]),
@@ -352,21 +295,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     );
   }
 
-  IconData _themeIcon(ThemeMode mode) {
-    return switch (mode) {
-      ThemeMode.system => Icons.brightness_auto,
-      ThemeMode.light => Icons.light_mode,
-      ThemeMode.dark => Icons.dark_mode,
-    };
-  }
 
-  String _themeTooltip(ThemeMode mode) {
-    return switch (mode) {
-      ThemeMode.system => 'Temă: System (apasă pentru Light)',
-      ThemeMode.light => 'Temă: Light (apasă pentru Dark)',
-      ThemeMode.dark => 'Temă: Dark (apasă pentru System)',
-    };
-  }
 }
 
 /// Custom FAB location that places the FAB above the footer instead
