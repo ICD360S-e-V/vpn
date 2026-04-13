@@ -69,7 +69,7 @@ class VpnTunnel {
   /// Generate and install a .mobileconfig profile for the WireGuard
   /// tunnel. macOS opens the profile installer — user confirms once.
   /// Subsequent connects are done via System Settings or WireGuard App.
-  static Future<void> installProfile({required String wgConfig}) async {
+  static Future<void> installProfile({required String wgConfig, bool killSwitch = true, bool autoConnect = true}) async {
     if (wgConfig.isEmpty) {
       throw VpnTunnelException(
         'Nu există o configurație WireGuard salvată. Re-enroll cu un cod nou.',
@@ -78,7 +78,7 @@ class VpnTunnel {
 
     appLogger.info('VPN', 'Generare profil .mobileconfig…');
 
-    final mobileconfig = _buildMobileconfig(wgConfig);
+    final mobileconfig = _buildMobileconfig(wgConfig, killSwitch: killSwitch, autoConnect: autoConnect);
     final dir = await getApplicationSupportDirectory();
     final file = File('${dir.path}/ICD360S-VPN.mobileconfig');
     await file.writeAsString(mobileconfig, flush: true);
@@ -229,7 +229,7 @@ class VpnTunnel {
   }
 
   /// Build a .mobileconfig XML for the WireGuard tunnel.
-  static String _buildMobileconfig(String wgConfig) {
+  static String _buildMobileconfig(String wgConfig, {bool killSwitch = true, bool autoConnect = true}) {
     // Extract endpoint from config for RemoteAddress
     final endpointMatch = RegExp(r'Endpoint\s*=\s*(\S+)').firstMatch(wgConfig);
     final endpoint = endpointMatch?.group(1) ?? 'vpn.icd360s.de:443';
@@ -279,40 +279,61 @@ class VpnTunnel {
 				<key>AuthenticationMethod</key>
 				<string>Password</string>
 			</dict>
-			<key>OnDemandEnabled</key>
-			<integer>1</integer>
-			<key>OnDemandRules</key>
-			<array>
-				<dict>
-					<key>Action</key>
-					<string>Connect</string>
-					<key>InterfaceTypeMatch</key>
-					<string>WiFi</string>
-				</dict>
-				<dict>
-					<key>Action</key>
-					<string>Connect</string>
-					<key>InterfaceTypeMatch</key>
-					<string>Cellular</string>
-				</dict>
-				<dict>
-					<key>Action</key>
-					<string>Connect</string>
-					<key>InterfaceTypeMatch</key>
-					<string>Ethernet</string>
-				</dict>
-				<dict>
-					<key>Action</key>
-					<string>Connect</string>
-				</dict>
-			</array>
+\${_buildOnDemandRules(killSwitch: killSwitch, autoConnect: autoConnect)}
 		</dict>
 	</array>
 </dict>
 </plist>''';
   }
 
-  static String _escapeXml(String s) {
+  /// Build OnDemandRules XML fragment based on user preferences.
+  /// - killSwitch: block traffic when VPN disconnects (Disconnect action)
+  /// - autoConnect: reconnect automatically on any network change
+  static String _buildOnDemandRules({
+    required bool killSwitch,
+    required bool autoConnect,
+  }) {
+    if (!killSwitch && !autoConnect) {
+      // No on-demand rules — user connects/disconnects manually
+      return '\t\t\t<key>OnDemandEnabled</key>\n\t\t\t<integer>0</integer>';
+    }
+
+    final action = autoConnect ? 'Connect' : 'Ignore';
+    final buf = StringBuffer();
+    buf.writeln('\t\t\t<key>OnDemandEnabled</key>');
+    buf.writeln('\t\t\t<integer>1</integer>');
+    buf.writeln('\t\t\t<key>OnDemandRules</key>');
+    buf.writeln('\t\t\t<array>');
+
+    // Rule per interface type
+    for (final iface in <String>['WiFi', 'Cellular', 'Ethernet']) {
+      buf.writeln('\t\t\t\t<dict>');
+      buf.writeln('\t\t\t\t\t<key>Action</key>');
+      buf.writeln('\t\t\t\t\t<string>$action</string>');
+      buf.writeln('\t\t\t\t\t<key>InterfaceTypeMatch</key>');
+      buf.writeln('\t\t\t\t\t<string>$iface</string>');
+      buf.writeln('\t\t\t\t</dict>');
+    }
+
+    // Default rule (catch-all)
+    buf.writeln('\t\t\t\t<dict>');
+    buf.writeln('\t\t\t\t\t<key>Action</key>');
+    buf.writeln('\t\t\t\t\t<string>$action</string>');
+    buf.writeln('\t\t\t\t</dict>');
+
+    if (killSwitch) {
+      // Disconnect action: if VPN drops, block all traffic
+      buf.writeln('\t\t\t\t<dict>');
+      buf.writeln('\t\t\t\t\t<key>Action</key>');
+      buf.writeln('\t\t\t\t\t<string>Connect</string>');
+      buf.writeln('\t\t\t\t</dict>');
+    }
+
+    buf.write('\t\t\t</array>');
+    return buf.toString();
+  }
+
+    static String _escapeXml(String s) {
     return s
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
