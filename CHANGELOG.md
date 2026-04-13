@@ -19,6 +19,18 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.21.0](https://github.com/ICD360S-e-V/vpn/compare/v1.20.0...v1.21.0) (2026-04-13)
+
+
+### Features
+
+* configurable OnDemandRules in .mobileconfig profile ([2fba23e](https://github.com/ICD360S-e-V/vpn/commit/2fba23e69e2b301096f28b60d8180a8370297259))
+
+
+### Bug Fixes
+
+* respect notification preferences in VPN status changes ([e0cc1ac](https://github.com/ICD360S-e-V/vpn/commit/e0cc1ac979ee1ed9d580a1db56910d1c5a4bf3fa))
+
 ## [1.20.0](https://github.com/ICD360S-e-V/vpn/compare/v1.19.0...v1.20.0) (2026-04-13)
 
 
