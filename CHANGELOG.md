@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.19.0](https://github.com/ICD360S-e-V/vpn/compare/v1.18.2...v1.19.0) (2026-04-13)
+
+
+### Features
+
+* add VPN and notification preferences ([2ef1bc6](https://github.com/ICD360S-e-V/vpn/commit/2ef1bc6905244a1e96987b6e719647c1e1eae047))
+
 ## [1.18.2](https://github.com/ICD360S-e-V/vpn/compare/v1.18.1...v1.18.2) (2026-04-13)
 
 
