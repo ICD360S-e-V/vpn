@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.21.3](https://github.com/ICD360S-e-V/vpn/compare/v1.21.2...v1.21.3) (2026-04-13)
+
+
+### Bug Fixes
+
+* append dependencies block for desugar_jdk_libs ([9955f93](https://github.com/ICD360S-e-V/vpn/commit/9955f931c073bf9d86316ebf0dac1a75151b2bc2))
+
 ## [1.21.2](https://github.com/ICD360S-e-V/vpn/compare/v1.21.1...v1.21.2) (2026-04-13)
 
 
