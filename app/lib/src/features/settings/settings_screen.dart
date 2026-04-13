@@ -13,6 +13,7 @@ import '../../api/app_logger.dart';
 import '../../api/app_prefs.dart';
 import '../../api/vpn_tunnel.dart';
 import '../../app.dart';
+import '../connection/connection_history_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -171,6 +172,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ref.read(notifyPeersProvider.notifier).set(v),
                 ),
               ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ----- Connection History -----
+          Text('Istoric', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Istoric conexiuni'),
+              subtitle: const Text('Evenimentele de conectare/deconectare VPN.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Istoric conexiuni')),
+                    body: const ConnectionHistoryScreen(),
+                  ),
+                ),
+              ),
             ),
           ),
 
