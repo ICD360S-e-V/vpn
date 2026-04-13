@@ -271,6 +271,51 @@ class _AppFooterState extends ConsumerState<AppFooter> {
     return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
   }
 
+  IconData _themeIcon(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.system => Icons.brightness_auto,
+      ThemeMode.light => Icons.light_mode,
+      ThemeMode.dark => Icons.dark_mode,
+    };
+  }
+
+  String _themeTooltip(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.system => 'Temă: System',
+      ThemeMode.light => 'Temă: Light',
+      ThemeMode.dark => 'Temă: Dark',
+    };
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delogare?'),
+        content: const Text(
+          'Vei pierde certificatul stocat și va trebui să faci '
+          'enrollment din nou cu un cod nou.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anulează'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delogare'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(appPhaseProvider.notifier).logout();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -392,6 +437,30 @@ class _AppFooterState extends ConsumerState<AppFooter> {
 
           const Spacer(),
 
+          // Dark mode toggle
+          IconButton(
+            tooltip: _themeTooltip(ref.watch(themeModeProvider)),
+            iconSize: 14,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.all(2),
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            icon: Icon(_themeIcon(ref.watch(themeModeProvider))),
+            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+          ),
+          const SizedBox(width: 4),
+
+          // Logout
+          IconButton(
+            tooltip: 'Delogare',
+            iconSize: 14,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.all(2),
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            icon: Icon(Icons.logout, color: theme.colorScheme.error, size: 14),
+            onPressed: _confirmLogout,
+          ),
+          const SizedBox(width: 8),
+
           // Version + update
           if (_version.isNotEmpty)
             InkWell(
@@ -438,6 +507,51 @@ class _StatusDot extends StatelessWidget {
   final bool active;
   final bool online;
   final VoidCallback? onTap;
+
+  IconData _themeIcon(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.system => Icons.brightness_auto,
+      ThemeMode.light => Icons.light_mode,
+      ThemeMode.dark => Icons.dark_mode,
+    };
+  }
+
+  String _themeTooltip(ThemeMode mode) {
+    return switch (mode) {
+      ThemeMode.system => 'Temă: System',
+      ThemeMode.light => 'Temă: Light',
+      ThemeMode.dark => 'Temă: Dark',
+    };
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delogare?'),
+        content: const Text(
+          'Vei pierde certificatul stocat și va trebui să faci '
+          'enrollment din nou cu un cod nou.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anulează'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delogare'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(appPhaseProvider.notifier).logout();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
