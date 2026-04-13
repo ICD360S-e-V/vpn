@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.21.1](https://github.com/ICD360S-e-V/vpn/compare/v1.21.0...v1.21.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* unescape string interpolation in _buildMobileconfig ([87bf306](https://github.com/ICD360S-e-V/vpn/commit/87bf30683ed0de448d9e1158d1bbc9ff3a787041))
+
 ## [1.21.0](https://github.com/ICD360S-e-V/vpn/compare/v1.20.0...v1.21.0) (2026-04-13)
 
 
