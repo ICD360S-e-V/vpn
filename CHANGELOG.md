@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.28.0](https://github.com/ICD360S-e-V/vpn/compare/v1.27.2...v1.28.0) (2026-04-13)
+
+
+### Features
+
+* bandwidth chart with selectable time ranges ([ca86d0f](https://github.com/ICD360S-e-V/vpn/commit/ca86d0f051b0251bc344eb70dc5b6955ae0bd8d9))
+
 ## [1.27.2](https://github.com/ICD360S-e-V/vpn/compare/v1.27.1...v1.27.2) (2026-04-13)
 
 
