@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/api_client.dart';
 import '../../api/app_logger.dart';
+import '../../api/connection_history.dart';
 import '../../api/app_prefs.dart';
 import '../../api/notification_service.dart';
 import '../../api/update_service.dart';
@@ -79,14 +80,24 @@ class _MainShellState extends ConsumerState<MainShell> {
       // Send system notifications on status transitions.
       // Skip the initial unknown→X transition and user-initiated toggles
       // (those already show a SnackBar).
-      if (prev != VpnTunnelStatus.unknown && !_userInitiatedToggle) {
-        final notifyVpn = ref.read(notifyVpnProvider);
-        if (notifyVpn) {
-          if (s == VpnTunnelStatus.connected) {
-            unawaited(NotificationService.instance.vpnConnected());
-          } else if (s == VpnTunnelStatus.disconnected &&
-              prev == VpnTunnelStatus.connected) {
-            unawaited(NotificationService.instance.vpnUnexpectedDisconnect());
+      if (prev != VpnTunnelStatus.unknown) {
+        // Record connection history
+        if (s == VpnTunnelStatus.connected) {
+          unawaited(ConnectionHistory.instance.recordConnect());
+        } else if (s == VpnTunnelStatus.disconnected &&
+            prev == VpnTunnelStatus.connected) {
+          unawaited(ConnectionHistory.instance.recordDisconnect());
+        }
+        // System notifications (unless user-initiated toggle)
+        if (!_userInitiatedToggle) {
+          final notifyVpn = ref.read(notifyVpnProvider);
+          if (notifyVpn) {
+            if (s == VpnTunnelStatus.connected) {
+              unawaited(NotificationService.instance.vpnConnected());
+            } else if (s == VpnTunnelStatus.disconnected &&
+                prev == VpnTunnelStatus.connected) {
+              unawaited(NotificationService.instance.vpnUnexpectedDisconnect());
+            }
           }
         }
       }
