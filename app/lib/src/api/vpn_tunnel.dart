@@ -95,7 +95,7 @@ class VpnTunnel {
   }
 
   /// Connect the VPN tunnel via scutil (macOS system VPN control).
-  static Future<void> connect({required String wgConfig}) async {
+  static Future<void> connect({required String wgConfig, bool killSwitch = true, bool autoConnect = true}) async {
     if (!Platform.isMacOS && !Platform.isLinux) {
       throw VpnTunnelException(
         'Connect în-app este disponibil doar pe macOS și Linux.',
@@ -111,7 +111,7 @@ class VpnTunnel {
     if (tunnelName == null) {
       // Profile not installed yet — generate and install
       appLogger.info('VPN', 'Profil WireGuard nu e instalat — se generează');
-      await installProfile(wgConfig: wgConfig);
+      await installProfile(wgConfig: wgConfig, killSwitch: killSwitch, autoConnect: autoConnect);
       throw VpnTunnelException(
         'Profilul VPN a fost generat. Instalează-l din System Settings → '
         'Privacy & Security → Profiles, apoi conectează-te din '
