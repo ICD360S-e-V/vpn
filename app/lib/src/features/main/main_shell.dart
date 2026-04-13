@@ -78,11 +78,14 @@ class _MainShellState extends ConsumerState<MainShell> {
       // Skip the initial unknown→X transition and user-initiated toggles
       // (those already show a SnackBar).
       if (prev != VpnTunnelStatus.unknown && !_userInitiatedToggle) {
-        if (s == VpnTunnelStatus.connected) {
-          unawaited(NotificationService.instance.vpnConnected());
-        } else if (s == VpnTunnelStatus.disconnected &&
-            prev == VpnTunnelStatus.connected) {
-          unawaited(NotificationService.instance.vpnUnexpectedDisconnect());
+        final notifyVpn = ref.read(notifyVpnProvider);
+        if (notifyVpn) {
+          if (s == VpnTunnelStatus.connected) {
+            unawaited(NotificationService.instance.vpnConnected());
+          } else if (s == VpnTunnelStatus.disconnected &&
+              prev == VpnTunnelStatus.connected) {
+            unawaited(NotificationService.instance.vpnUnexpectedDisconnect());
+          }
         }
       }
       _userInitiatedToggle = false;
