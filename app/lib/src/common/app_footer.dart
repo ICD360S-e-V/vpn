@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../api/notification_service.dart';
 import '../api/update_service.dart';
 import '../api/vpn_tunnel.dart';
 import '../app.dart';
@@ -34,6 +35,7 @@ class _AppFooterState extends ConsumerState<AppFooter> {
   Timer? _healthTimer;
   Timer? _clockTimer;
   DateTime? _serverTime;
+  Set<String> _knownPeerKeys = const <String>{};
 
   @override
   void initState() {
@@ -96,11 +98,34 @@ class _AppFooterState extends ConsumerState<AppFooter> {
         if (p.lastHandshakeAt == null) return false;
         return now.difference(p.lastHandshakeAt!).inMinutes < 3;
       }).length;
+      // Detect new peers connecting (handshake started)
+      final currentLiveKeys = <String>{};
+      for (final p in peers) {
+        if (p.lastHandshakeAt != null &&
+            now.difference(p.lastHandshakeAt!).inMinutes < 3) {
+          currentLiveKeys.add(p.publicKey);
+        }
+      }
+      if (_knownPeerKeys.isNotEmpty) {
+        final newlyConnected = currentLiveKeys.difference(_knownPeerKeys);
+        for (final key in newlyConnected) {
+          final peer = peers.firstWhere((p) => p.publicKey == key);
+          unawaited(NotificationService.instance.peerConnected(peer.name));
+        }
+        final newlyDisconnected = _knownPeerKeys.difference(currentLiveKeys);
+        for (final key in newlyDisconnected) {
+          final peer = _peers.where((p) => p.publicKey == key);
+          if (peer.isNotEmpty) {
+            unawaited(NotificationService.instance.peerDisconnected(peer.first.name));
+          }
+        }
+      }
       setState(() {
         _health = h;
         _peers = peers;
         _livePeers = live;
         _serverTime = h.serverTime;
+        _knownPeerKeys = currentLiveKeys;
       });
     } catch (_) {
       if (!mounted) return;
