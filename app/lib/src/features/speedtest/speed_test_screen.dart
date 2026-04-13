@@ -142,7 +142,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   Future<double?> _measureUpload() async {
     try {
       // Generate a 1MB temp file for upload measurement
-      final tmpFile = '/tmp/icd360s_speedtest_upload.bin';
+      const tmpFile = '/tmp/icd360s_speedtest_upload.bin';
       await Process.run('dd', <String>[
         'if=/dev/urandom', 'of=$tmpFile', 'bs=1048576', 'count=1',
       ]);
