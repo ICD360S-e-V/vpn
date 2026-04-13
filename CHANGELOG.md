@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.26.1](https://github.com/ICD360S-e-V/vpn/compare/v1.26.0...v1.26.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* DNS log response_status, elapsedMs key, setState in refresh ([78619b6](https://github.com/ICD360S-e-V/vpn/commit/78619b6a98588cb49ca0a1f256ca45f871e3026b))
+* narrow device detection keywords, fix generic fallbacks ([5d5f5ba](https://github.com/ICD360S-e-V/vpn/commit/5d5f5bafcda624193ed9fdfde33e2114a748d996))
+* replace /dev/urandom upload with bounded temp file ([94aad48](https://github.com/ICD360S-e-V/vpn/commit/94aad4839d5f0405a36e6a51eaac87cd14e09f4d))
+
 ## [1.26.0](https://github.com/ICD360S-e-V/vpn/compare/v1.25.0...v1.26.0) (2026-04-13)
 
 
