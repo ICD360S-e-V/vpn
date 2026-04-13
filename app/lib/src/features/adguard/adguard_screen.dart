@@ -144,7 +144,7 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
           const SizedBox(height: 8),
           ...queries.take(20).map((q) {
             final query = q as Map<String, dynamic>;
-            final name = (query['question'] as Map<String, dynamic>?)?['name'] ?? '?';
+            final name = ((query['question'] as Map<String, dynamic>?)?['name'] as String?) ?? '?';
             final reason = query['reason'] as String? ?? '';
             final blocked = reason.contains('Filtered');
             final client = query['client'] as String? ?? '?';
