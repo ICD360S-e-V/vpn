@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.22.0](https://github.com/ICD360S-e-V/vpn/compare/v1.21.3...v1.22.0) (2026-04-13)
+
+
+### Features
+
+* DNS query log screen with search, filter, pagination ([2acbd62](https://github.com/ICD360S-e-V/vpn/commit/2acbd62bf2a9297a31e1a29a93788b3fee517bc5))
+
 ## [1.21.3](https://github.com/ICD360S-e-V/vpn/compare/v1.21.2...v1.21.3) (2026-04-13)
 
 
