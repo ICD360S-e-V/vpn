@@ -107,8 +107,8 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
                 icon: Icons.block,
                 label: 'Blocate',
                 value: '${stats['num_blocked_filtering'] ?? 0}',
-                subtitle: stats['num_dns_queries'] != null && stats['num_dns_queries'] > 0
-                    ? '${((stats['num_blocked_filtering'] ?? 0) / stats['num_dns_queries'] * 100).toStringAsFixed(1)}%'
+                subtitle: stats['num_dns_queries'] != null && (stats['num_dns_queries'] as num) > 0
+                    ? '${(((stats['num_blocked_filtering'] as num?) ?? 0) / (stats['num_dns_queries'] as num) * 100).toStringAsFixed(1)}%'
                     : null,
                 color: Colors.red,
               ),
@@ -128,7 +128,7 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
                 icon: Icons.timer,
                 label: 'Timp mediu',
                 value: stats['avg_processing_time'] != null
-                    ? '${(stats['avg_processing_time'] as num).toStringAsFixed(1)}ms'
+                    ? '${((stats['avg_processing_time'] as num)).toStringAsFixed(1)}ms'
                     : '?',
                 color: Colors.purple,
               ),
