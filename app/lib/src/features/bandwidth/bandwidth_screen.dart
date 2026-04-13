@@ -135,7 +135,7 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       children: <Widget>[
-                        Icon(Icons.arrow_downward, color: Colors.green, size: 20),
+                        const Icon(Icons.arrow_downward, color: Colors.green, size: 20),
                         const SizedBox(height: 4),
                         Text('Download', style: theme.textTheme.labelSmall),
                         Text(_formatBytes(totalRx.toDouble()),
@@ -153,7 +153,7 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       children: <Widget>[
-                        Icon(Icons.arrow_upward, color: Colors.blue, size: 20),
+                        const Icon(Icons.arrow_upward, color: Colors.blue, size: 20),
                         const SizedBox(height: 4),
                         Text('Upload', style: theme.textTheme.labelSmall),
                         Text(_formatBytes(totalTx.toDouble()),
