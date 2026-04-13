@@ -289,8 +289,8 @@ class _MainShellState extends ConsumerState<MainShell> {
                       label: Text('Trafic'),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.shield_outlined),
-                      selectedIcon: Icon(Icons.shield),
+                      icon: Icon(Icons.ads_click_outlined),
+                      selectedIcon: Icon(Icons.ads_click),
                       label: Text('AdGuard'),
                     ),
                     NavigationRailDestination(
