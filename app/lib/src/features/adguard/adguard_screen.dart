@@ -107,6 +107,9 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
                 icon: Icons.block,
                 label: 'Blocate',
                 value: '${stats['num_blocked_filtering'] ?? 0}',
+                subtitle: stats['num_dns_queries'] != null && stats['num_dns_queries'] > 0
+                    ? '${((stats['num_blocked_filtering'] ?? 0) / stats['num_dns_queries'] * 100).toStringAsFixed(1)}%'
+                    : null,
                 color: Colors.red,
               ),
               const SizedBox(width: 8),
@@ -115,6 +118,33 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
                 label: 'Safe browsing',
                 value: '${stats['num_replaced_safebrowsing'] ?? 0}',
                 color: Colors.orange,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              _StatCard(
+                icon: Icons.timer,
+                label: 'Timp mediu',
+                value: stats['avg_processing_time'] != null
+                    ? '${(stats['avg_processing_time'] as num).toStringAsFixed(1)}ms'
+                    : '?',
+                color: Colors.purple,
+              ),
+              const SizedBox(width: 8),
+              _StatCard(
+                icon: Icons.search,
+                label: 'Safe search',
+                value: '${stats['num_replaced_safesearch'] ?? 0}',
+                color: Colors.teal,
+              ),
+              const SizedBox(width: 8),
+              _StatCard(
+                icon: Icons.family_restroom,
+                label: 'Parental',
+                value: '${stats['num_replaced_parental'] ?? 0}',
+                color: Colors.indigo,
               ),
             ],
           ),
@@ -131,6 +161,40 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
                     Text('Top domenii blocate', style: theme.textTheme.titleSmall),
                     const SizedBox(height: 8),
                     ..._buildTopDomains(stats['top_blocked_domains'] as List<dynamic>),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 16),
+
+          // Top queried domains
+          if (stats['top_queried_domains'] != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('Top domenii interogate', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    ..._buildTopList(stats['top_queried_domains'] as List<dynamic>, Colors.blue, Icons.dns),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // Top clients
+          if (stats['top_clients'] != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('Top clienți', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    ..._buildTopList(stats['top_clients'] as List<dynamic>, Colors.green, Icons.devices),
                   ],
                 ),
               ),
@@ -185,35 +249,40 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
   }
 
   List<Widget> _buildTopDomains(List<dynamic> domains) {
-    final items = <Widget>[];
-    for (final d in domains.take(10)) {
+    return _buildTopList(domains, Colors.red, Icons.block);
+  }
+
+  List<Widget> _buildTopList(List<dynamic> items, Color color, IconData icon) {
+    final widgets = <Widget>[];
+    for (final d in items.take(10)) {
       final entry = d as Map<String, dynamic>;
-      final domain = entry.keys.first;
+      final key = entry.keys.first;
       final count = entry.values.first;
-      items.add(Padding(
+      widgets.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.block, size: 14, color: Colors.red),
+            Icon(icon, size: 14, color: color),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(domain, style: const TextStyle(fontFamily: 'monospace', fontSize: 11), overflow: TextOverflow.ellipsis),
+              child: Text(key, style: const TextStyle(fontFamily: 'monospace', fontSize: 11), overflow: TextOverflow.ellipsis),
             ),
             Text('$count', style: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.w600)),
           ],
         ),
       ));
     }
-    return items;
+    return widgets;
   }
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.icon, required this.label, required this.value, required this.color});
+  const _StatCard({required this.icon, required this.label, required this.value, required this.color, this.subtitle});
   final IconData icon;
   final String label;
   final String value;
   final Color color;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +299,10 @@ class _StatCard extends StatelessWidget {
               Text(value, style: theme.textTheme.titleMedium?.copyWith(
                 color: color, fontFamily: 'monospace', fontWeight: FontWeight.w700,
               )),
+              if (subtitle != null)
+                Text(subtitle!, style: theme.textTheme.labelSmall?.copyWith(
+                  color: color, fontFamily: 'monospace',
+                )),
             ],
           ),
         ),
