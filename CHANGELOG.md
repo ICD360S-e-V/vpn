@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.25.0](https://github.com/ICD360S-e-V/vpn/compare/v1.24.0...v1.25.0) (2026-04-13)
+
+
+### Features
+
+* connection history screen with event timeline ([56b3317](https://github.com/ICD360S-e-V/vpn/commit/56b33173c0040ecfea3ede9bd1a11ec890ffe53a))
+* peer device type detection and live status badge ([d7fecad](https://github.com/ICD360S-e-V/vpn/commit/d7fecadfbc3b89583da71170066552953ba9169c))
+* persist VPN connection history to local JSON file ([9279ed2](https://github.com/ICD360S-e-V/vpn/commit/9279ed2a9f380cc4b787ab89e92a4e9906877485))
+
 ## [1.24.0](https://github.com/ICD360S-e-V/vpn/compare/v1.23.0...v1.24.0) (2026-04-13)
 
 
