@@ -19,6 +19,15 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.26.2](https://github.com/ICD360S-e-V/vpn/compare/v1.26.1...v1.26.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* correct OnDemandRules — remove unreachable rule, document limitations ([103feac](https://github.com/ICD360S-e-V/vpn/commit/103feac0bcef6887047a957e5d30eb7353c62f91))
+* safe peer lookup with .where instead of firstWhere ([4d21066](https://github.com/ICD360S-e-V/vpn/commit/4d2106652193551f56e5912e4d1575fd33aa7f26))
+* use distinct icon for AdGuard tab (was duplicate shield) ([2c07dc6](https://github.com/ICD360S-e-V/vpn/commit/2c07dc69a2401a01cac9d47a7a3c19625ed13ce5))
+
 ## [1.26.1](https://github.com/ICD360S-e-V/vpn/compare/v1.26.0...v1.26.1) (2026-04-13)
 
 
