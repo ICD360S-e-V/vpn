@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../api/app_prefs.dart';
 import '../api/notification_service.dart';
 import '../api/update_service.dart';
 import '../api/vpn_tunnel.dart';
@@ -106,7 +107,7 @@ class _AppFooterState extends ConsumerState<AppFooter> {
           currentLiveKeys.add(p.publicKey);
         }
       }
-      if (_knownPeerKeys.isNotEmpty) {
+      if (_knownPeerKeys.isNotEmpty && ref.read(notifyPeersProvider)) {
         final newlyConnected = currentLiveKeys.difference(_knownPeerKeys);
         for (final key in newlyConnected) {
           final peer = peers.firstWhere((p) => p.publicKey == key);
