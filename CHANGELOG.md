@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.24.0](https://github.com/ICD360S-e-V/vpn/compare/v1.23.0...v1.24.0) (2026-04-13)
+
+
+### Features
+
+* add Speed Test and DNS Log tabs to NavigationRail ([813e163](https://github.com/ICD360S-e-V/vpn/commit/813e163bde6c888bb30a5bef49728ae8c2257664))
+* VPN speed test screen with download, upload, ping ([1ea8d19](https://github.com/ICD360S-e-V/vpn/commit/1ea8d1959b8921fb03b1d8a5438638277b42bcf9))
+
 ## [1.23.0](https://github.com/ICD360S-e-V/vpn/compare/v1.22.0...v1.23.0) (2026-04-13)
 
 
