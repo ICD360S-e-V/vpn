@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.28.2](https://github.com/ICD360S-e-V/vpn/compare/v1.28.1...v1.28.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* explicit num cast for dynamic stats values in AdGuard ([c376c2f](https://github.com/ICD360S-e-V/vpn/commit/c376c2f284e6e728f9aec9b488dba2f5adf1f93b))
+
 ## [1.28.1](https://github.com/ICD360S-e-V/vpn/compare/v1.28.0...v1.28.1) (2026-04-13)
 
 
