@@ -279,7 +279,7 @@ class VpnTunnel {
 				<key>AuthenticationMethod</key>
 				<string>Password</string>
 			</dict>
-\${_buildOnDemandRules(killSwitch: killSwitch, autoConnect: autoConnect)}
+${_buildOnDemandRules(killSwitch: killSwitch, autoConnect: autoConnect)}
 		</dict>
 	</array>
 </dict>
