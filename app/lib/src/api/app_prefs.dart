@@ -1,9 +1,10 @@
 // ICD360SVPN — lib/src/api/app_prefs.dart
 //
 // Tiny file-backed key/value store for non-secret UI preferences:
-// theme mode, future window size memory, etc. Lives next to
-// identity.json under the OS application-support directory but is a
-// separate file so wiping it does not log the user out.
+// theme mode, VPN settings (kill switch, auto-connect), notification
+// preferences, etc. Lives next to identity.json under the OS
+// application-support directory but is a separate file so wiping it
+// does not log the user out.
 
 import 'dart:convert';
 import 'dart:io';
@@ -21,6 +22,10 @@ class AppPrefs {
 
   static const String _filename = 'prefs.json';
   static const String _kThemeMode = 'theme_mode';
+  static const String _kKillSwitch = 'vpn_kill_switch';
+  static const String _kAutoConnect = 'vpn_auto_connect';
+  static const String _kNotifyVpn = 'notify_vpn_status';
+  static const String _kNotifyPeers = 'notify_peer_status';
 
   Future<File> _file() async {
     final dir = _overrideDir ?? await getApplicationSupportDirectory();
@@ -56,7 +61,8 @@ class AppPrefs {
     await tmp.rename(file.path);
   }
 
-  /// Returns the saved ThemeMode or [ThemeMode.system] if none.
+  // ----- Theme -----
+
   Future<ThemeMode> loadThemeMode() async {
     await _load();
     final raw = _cache[_kThemeMode] as String?;
@@ -76,15 +82,65 @@ class AppPrefs {
     };
     await _save();
   }
+
+  // ----- VPN settings -----
+
+  Future<bool> loadKillSwitch() async {
+    await _load();
+    return (_cache[_kKillSwitch] as bool?) ?? true; // ON by default
+  }
+
+  Future<void> saveKillSwitch(bool value) async {
+    await _load();
+    _cache[_kKillSwitch] = value;
+    await _save();
+  }
+
+  Future<bool> loadAutoConnect() async {
+    await _load();
+    return (_cache[_kAutoConnect] as bool?) ?? true; // ON by default
+  }
+
+  Future<void> saveAutoConnect(bool value) async {
+    await _load();
+    _cache[_kAutoConnect] = value;
+    await _save();
+  }
+
+  // ----- Notification settings -----
+
+  Future<bool> loadNotifyVpn() async {
+    await _load();
+    return (_cache[_kNotifyVpn] as bool?) ?? true;
+  }
+
+  Future<void> saveNotifyVpn(bool value) async {
+    await _load();
+    _cache[_kNotifyVpn] = value;
+    await _save();
+  }
+
+  Future<bool> loadNotifyPeers() async {
+    await _load();
+    return (_cache[_kNotifyPeers] as bool?) ?? true;
+  }
+
+  Future<void> saveNotifyPeers(bool value) async {
+    await _load();
+    _cache[_kNotifyPeers] = value;
+    await _save();
+  }
 }
 
 // ---------------------------------------------------------------
-// Riverpod glue: theme mode notifier with disk persistence
+// Riverpod glue
 // ---------------------------------------------------------------
 
 final Provider<AppPrefs> appPrefsProvider = Provider<AppPrefs>(
   (ref) => AppPrefs(),
 );
+
+// ----- Theme mode -----
 
 final NotifierProvider<ThemeModeController, ThemeMode>
     themeModeProvider =
@@ -96,10 +152,6 @@ class ThemeModeController extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
     _prefs = ref.read(appPrefsProvider);
-    // Best-effort hydrate from disk after first frame so the
-    // saved value replaces our default `system` shortly after
-    // launch. We don't `await` here because Notifier.build must
-    // return synchronously.
     Future<void>.microtask(() async {
       final saved = await _prefs.loadThemeMode();
       if (saved != state) state = saved;
@@ -113,12 +165,111 @@ class ThemeModeController extends Notifier<ThemeMode> {
   }
 
   Future<void> toggle() async {
-    // Three-state cycle: system → light → dark → system.
     final next = switch (state) {
       ThemeMode.system => ThemeMode.light,
       ThemeMode.light => ThemeMode.dark,
       ThemeMode.dark => ThemeMode.system,
     };
     await set(next);
+  }
+}
+
+// ----- Kill switch -----
+
+final NotifierProvider<KillSwitchController, bool>
+    killSwitchProvider =
+    NotifierProvider<KillSwitchController, bool>(KillSwitchController.new);
+
+class KillSwitchController extends Notifier<bool> {
+  late AppPrefs _prefs;
+
+  @override
+  bool build() {
+    _prefs = ref.read(appPrefsProvider);
+    Future<void>.microtask(() async {
+      final saved = await _prefs.loadKillSwitch();
+      if (saved != state) state = saved;
+    });
+    return true; // default ON
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    await _prefs.saveKillSwitch(value);
+  }
+}
+
+// ----- Auto-connect -----
+
+final NotifierProvider<AutoConnectController, bool>
+    autoConnectProvider =
+    NotifierProvider<AutoConnectController, bool>(AutoConnectController.new);
+
+class AutoConnectController extends Notifier<bool> {
+  late AppPrefs _prefs;
+
+  @override
+  bool build() {
+    _prefs = ref.read(appPrefsProvider);
+    Future<void>.microtask(() async {
+      final saved = await _prefs.loadAutoConnect();
+      if (saved != state) state = saved;
+    });
+    return true; // default ON
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    await _prefs.saveAutoConnect(value);
+  }
+}
+
+// ----- Notification: VPN status -----
+
+final NotifierProvider<NotifyVpnController, bool>
+    notifyVpnProvider =
+    NotifierProvider<NotifyVpnController, bool>(NotifyVpnController.new);
+
+class NotifyVpnController extends Notifier<bool> {
+  late AppPrefs _prefs;
+
+  @override
+  bool build() {
+    _prefs = ref.read(appPrefsProvider);
+    Future<void>.microtask(() async {
+      final saved = await _prefs.loadNotifyVpn();
+      if (saved != state) state = saved;
+    });
+    return true;
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    await _prefs.saveNotifyVpn(value);
+  }
+}
+
+// ----- Notification: Peer status -----
+
+final NotifierProvider<NotifyPeersController, bool>
+    notifyPeersProvider =
+    NotifierProvider<NotifyPeersController, bool>(NotifyPeersController.new);
+
+class NotifyPeersController extends Notifier<bool> {
+  late AppPrefs _prefs;
+
+  @override
+  bool build() {
+    _prefs = ref.read(appPrefsProvider);
+    Future<void>.microtask(() async {
+      final saved = await _prefs.loadNotifyPeers();
+      if (saved != state) state = saved;
+    });
+    return true;
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    await _prefs.saveNotifyPeers(value);
   }
 }
