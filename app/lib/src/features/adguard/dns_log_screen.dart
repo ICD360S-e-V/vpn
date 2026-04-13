@@ -67,8 +67,8 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
         url += '&search=${Uri.encodeComponent(_search)}';
       }
       final responseStatus = switch (_filter) {
-        DnsFilter.blocked => '&response_status=filtered',
-        DnsFilter.allowed => '&response_status=processed',
+        DnsFilter.blocked => '&response_status=blocked',
+        DnsFilter.allowed => '&response_status=whitelisted',
         DnsFilter.all => '',
       };
       url += responseStatus;
