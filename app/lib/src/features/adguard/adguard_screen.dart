@@ -62,21 +62,28 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
       });
     } catch (e) {
       appLogger.warn('AG', 'Load eșuat: $e');
-      if (mounted) setState(() => _needsVpn = true);
+      // Don't flip needsVpn on every error — VPN may be connected but
+      // AdGuard could be temporarily unreachable
     }
     if (mounted) setState(() => _loading = false);
   }
 
   static Future<Map<String, dynamic>?> _curlJson(String url) async {
-    final result = await Process.run('/usr/bin/curl', <String>[
-      '-s', '--connect-timeout', '5', '--max-time', '8',
-      '-u', 'admin:admin',
-      url,
-    ]).timeout(const Duration(seconds: 10));
-    if (result.exitCode != 0) return null;
-    final body = (result.stdout as String).trim();
-    if (body.isEmpty) return null;
-    return jsonDecode(body) as Map<String, dynamic>;
+    try {
+      final result = await Process.run('/usr/bin/curl', <String>[
+        '-s', '--connect-timeout', '5', '--max-time', '8',
+        '-u', 'admin:admin',
+        url,
+      ]).timeout(const Duration(seconds: 10));
+      if (result.exitCode != 0) return null;
+      final body = (result.stdout as String).trim();
+      if (body.isEmpty) return null;
+      final decoded = jsonDecode(body);
+      if (decoded is! Map<String, dynamic>) return null;
+      return decoded;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -210,7 +217,7 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
             final query = q as Map<String, dynamic>;
             final name = ((query['question'] as Map<String, dynamic>?)?['name'] as String?) ?? '?';
             final reason = query['reason'] as String? ?? '';
-            final blocked = reason.contains('Filtered');
+            final blocked = reason.startsWith('Filtered');
             final client = query['client'] as String? ?? '?';
             final time = query['time'] as String? ?? '';
             final timeShort = time.length >= 19 ? time.substring(11, 19) : time;
@@ -256,6 +263,7 @@ class _AdGuardScreenState extends State<AdGuardScreen> {
     final widgets = <Widget>[];
     for (final d in items.take(10)) {
       final entry = d as Map<String, dynamic>;
+      if (entry.isEmpty) continue;
       final key = entry.keys.first;
       final count = entry.values.first;
       widgets.add(Padding(
