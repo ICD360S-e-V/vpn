@@ -49,6 +49,14 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
   bool _needsVpn = false;
   Timer? _timer;
   _TimeRange _range = _TimeRange.day1;
+  // Live mode state — delta-based per-second rate tracking
+  int? _prevRxTotal;
+  int? _prevTxTotal;
+  DateTime? _prevPollTime;
+  double _liveRxRate = 0; // bytes/sec
+  double _liveTxRate = 0; // bytes/sec
+  final List<double> _rxHistory = <double>[];
+  final List<double> _txHistory = <double>[];
 
   @override
   void initState() {
@@ -65,7 +73,52 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
 
   void _resetTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(_range.refresh, (_) => _loadData());
+    _prevRxTotal = null;
+    _prevTxTotal = null;
+    _prevPollTime = null;
+    _rxHistory.clear();
+    _txHistory.clear();
+    _liveRxRate = 0;
+    _liveTxRate = 0;
+    if (_range == _TimeRange.live) {
+      _timer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _loadLiveData(),
+      );
+    } else {
+      _timer = Timer.periodic(_range.refresh, (_) => _loadData());
+    }
+  }
+
+  Future<void> _loadLiveData() async {
+    if (_selectedPeer == null) return;
+    try {
+      final peers = await widget.client.listPeers();
+      if (!mounted) return;
+      final peer = peers.firstWhere(
+        (p) => p.publicKey == _selectedPeer!.publicKey,
+        orElse: () => _selectedPeer!,
+      );
+      final now = DateTime.now();
+      if (_prevRxTotal != null && _prevPollTime != null) {
+        final elapsedSec = now.difference(_prevPollTime!).inMilliseconds / 1000.0;
+        if (elapsedSec > 0) {
+          final dRx = peer.rxBytesTotal - _prevRxTotal!;
+          final dTx = peer.txBytesTotal - _prevTxTotal!;
+          setState(() {
+            _liveRxRate = dRx < 0 ? 0 : dRx / elapsedSec;
+            _liveTxRate = dTx < 0 ? 0 : dTx / elapsedSec;
+            if (_rxHistory.length >= 60) _rxHistory.removeAt(0);
+            if (_txHistory.length >= 60) _txHistory.removeAt(0);
+            _rxHistory.add(_liveRxRate);
+            _txHistory.add(_liveTxRate);
+          });
+        }
+      }
+      _prevRxTotal = peer.rxBytesTotal;
+      _prevTxTotal = peer.txBytesTotal;
+      _prevPollTime = now;
+    } catch (_) {}
   }
 
   Future<void> _loadPeers() async {
@@ -189,7 +242,7 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
         ),
         const SizedBox(height: 8),
 
-        // Summary cards
+        // Summary cards — live rate in Live mode, totals otherwise
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -200,13 +253,29 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       children: <Widget>[
-                        const Icon(Icons.arrow_downward, color: Colors.green, size: 20),
+                        const Icon(Icons.arrow_downward, color: Colors.green, size: 24),
                         const SizedBox(height: 4),
-                        Text('Download', style: theme.textTheme.labelSmall),
-                        Text(_formatBytes(totalRx.toDouble()),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.green, fontFamily: 'monospace',
-                          )),
+                        Text(
+                          _range == _TimeRange.live ? 'Download acum' : 'Download total',
+                          style: theme.textTheme.labelSmall,
+                        ),
+                        Text(
+                          _range == _TimeRange.live
+                              ? '${_formatBytes(_liveRxRate)}/s'
+                              : _formatBytes(totalRx.toDouble()),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: Colors.green,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_range == _TimeRange.live && _selectedPeer != null)
+                          Text(
+                            'Total: ${_formatBytes(_selectedPeer!.rxBytesTotal.toDouble())}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -218,13 +287,29 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       children: <Widget>[
-                        const Icon(Icons.arrow_upward, color: Colors.blue, size: 20),
+                        const Icon(Icons.arrow_upward, color: Colors.blue, size: 24),
                         const SizedBox(height: 4),
-                        Text('Upload', style: theme.textTheme.labelSmall),
-                        Text(_formatBytes(totalTx.toDouble()),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.blue, fontFamily: 'monospace',
-                          )),
+                        Text(
+                          _range == _TimeRange.live ? 'Upload acum' : 'Upload total',
+                          style: theme.textTheme.labelSmall,
+                        ),
+                        Text(
+                          _range == _TimeRange.live
+                              ? '${_formatBytes(_liveTxRate)}/s'
+                              : _formatBytes(totalTx.toDouble()),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: Colors.blue,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_range == _TimeRange.live && _selectedPeer != null)
+                          Text(
+                            'Total: ${_formatBytes(_selectedPeer!.txBytesTotal.toDouble())}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -236,20 +321,31 @@ class _BandwidthScreenState extends State<BandwidthScreen> {
 
         // Chart
         Expanded(
-          child: points.isEmpty
-              ? Center(
-                  child: _loading
-                      ? const CircularProgressIndicator()
-                      : const Text('Nicio dată disponibilă.'),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _BandwidthChart(
-                    points: points,
-                    formatBytes: _formatBytes,
-                    axisLabel: _axisLabel,
-                  ),
-                ),
+          child: _range == _TimeRange.live
+              ? (_rxHistory.length < 2
+                  ? const Center(child: Text('Colectare date live…'))
+                  : Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _LiveSparkline(
+                        rxHistory: _rxHistory,
+                        txHistory: _txHistory,
+                        formatBytes: _formatBytes,
+                      ),
+                    ))
+              : (points.isEmpty
+                  ? Center(
+                      child: _loading
+                          ? const CircularProgressIndicator()
+                          : const Text('Nicio dată disponibilă.'),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _BandwidthChart(
+                        points: points,
+                        formatBytes: _formatBytes,
+                        axisLabel: _axisLabel,
+                      ),
+                    )),
         ),
       ],
     );
@@ -358,6 +454,83 @@ class _BandwidthChart extends StatelessWidget {
             belowBarData: BarAreaData(
               show: true,
               color: Colors.blue.withValues(alpha: 0.1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveSparkline extends StatelessWidget {
+  const _LiveSparkline({
+    required this.rxHistory,
+    required this.txHistory,
+    required this.formatBytes,
+  });
+  final List<double> rxHistory;
+  final List<double> txHistory;
+  final String Function(double) formatBytes;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxRate = [
+      ...rxHistory,
+      ...txHistory,
+    ].fold<double>(0, (m, v) => v > m ? v : m);
+    final maxY = maxRate == 0 ? 1.0 : maxRate * 1.1;
+
+    final rxSpots = <FlSpot>[];
+    final txSpots = <FlSpot>[];
+    for (var i = 0; i < rxHistory.length; i++) {
+      rxSpots.add(FlSpot(i.toDouble(), rxHistory[i]));
+      txSpots.add(FlSpot(i.toDouble(), txHistory[i]));
+    }
+
+    return LineChart(
+      LineChartData(
+        minY: 0,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: maxY / 4,
+        ),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 60,
+              getTitlesWidget: (v, _) => Text(
+                '${formatBytes(v)}/s',
+                style: const TextStyle(fontSize: 9, fontFamily: 'monospace'),
+              ),
+            ),
+          ),
+        ),
+        lineTouchData: const LineTouchData(enabled: false),
+        lineBarsData: <LineChartBarData>[
+          LineChartBarData(
+            spots: rxSpots,
+            color: Colors.green,
+            barWidth: 2,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.green.withValues(alpha: 0.15),
+            ),
+          ),
+          LineChartBarData(
+            spots: txSpots,
+            color: Colors.blue,
+            barWidth: 2,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.blue.withValues(alpha: 0.15),
             ),
           ),
         ],
