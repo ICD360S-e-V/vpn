@@ -13,7 +13,9 @@ import '../../api/connection_check.dart';
 import '../../api/vpn_tunnel.dart';
 
 class ConnectionScreen extends StatefulWidget {
-  const ConnectionScreen({super.key});
+  const ConnectionScreen({super.key, required this.vpnStatus});
+
+  final VpnTunnelStatus vpnStatus;
 
   @override
   State<ConnectionScreen> createState() => _ConnectionScreenState();
@@ -30,6 +32,14 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     unawaited(_runCheck());
   }
 
+  @override
+  void didUpdateWidget(ConnectionScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.vpnStatus != widget.vpnStatus) {
+      unawaited(_runCheck());
+    }
+  }
+
   Future<void> _runCheck() async {
     if (_checking) return;
     setState(() {
@@ -37,9 +47,8 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       _error = null;
     });
     try {
-      final vpnStatus = await VpnTunnel.status();
       final info = await ConnectionCheck.run(
-        vpnActive: vpnStatus == VpnTunnelStatus.connected,
+        vpnActive: widget.vpnStatus == VpnTunnelStatus.connected,
       );
       if (!mounted) return;
       setState(() => _info = info);
