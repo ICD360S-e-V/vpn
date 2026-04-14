@@ -19,6 +19,21 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.29.0](https://github.com/ICD360S-e-V/vpn/compare/v1.28.3...v1.29.0) (2026-04-14)
+
+
+### Features
+
+* pass vpnStatus to ConnectionScreen for auto-refresh ([9b4a5cd](https://github.com/ICD360S-e-V/vpn/commit/9b4a5cd3dccb20a3c65ffa738991b33f9b126ac2))
+* true live bandwidth mode with per-second rate display ([bad2055](https://github.com/ICD360S-e-V/vpn/commit/bad205502ab82b86e2fbc2a6cb4fe35f3331ad17))
+
+
+### Bug Fixes
+
+* AdGuard avg time units, blocked detection, error handling ([ea6b3a1](https://github.com/ICD360S-e-V/vpn/commit/ea6b3a151b051b07e09664baad7607289ae42b6c))
+* auto-refresh peers list every 15s + proper dispose ([229d95c](https://github.com/ICD360S-e-V/vpn/commit/229d95c95cac9e01035e31e86608dbf90f2f9291))
+* auto-refresh Status when VPN state changes ([e899ed7](https://github.com/ICD360S-e-V/vpn/commit/e899ed7fb291b4da9b5bcd3915cce7fa4085ae55))
+
 ## [1.28.3](https://github.com/ICD360S-e-V/vpn/compare/v1.28.2...v1.28.3) (2026-04-14)
 
 
