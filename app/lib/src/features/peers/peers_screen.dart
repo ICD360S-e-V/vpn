@@ -28,11 +28,22 @@ class _PeersScreenState extends State<PeersScreen> {
   bool _loading = false;
   String? _error;
   bool _needsVpn = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+    _timer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => unawaited(_load()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
