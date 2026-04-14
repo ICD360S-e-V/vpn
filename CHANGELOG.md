@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.28.3](https://github.com/ICD360S-e-V/vpn/compare/v1.28.2...v1.28.3) (2026-04-14)
+
+
+### Bug Fixes
+
+* **dns_log:** filter buttons now work — epoch cancel + correct API value ([4da7a78](https://github.com/ICD360S-e-V/vpn/commit/4da7a782455cf875af90b3b56bcf86d67094e7a5))
+
 ## [1.28.2](https://github.com/ICD360S-e-V/vpn/compare/v1.28.1...v1.28.2) (2026-04-13)
 
 
