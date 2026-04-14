@@ -31,6 +31,9 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _search = '';
   Timer? _debounce;
+  // Cancellation token: incremented on each refresh so in-flight loads
+  // belonging to a previous filter/search are ignored when they complete.
+  int _epoch = 0;
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
   Future<void> _loadMore() async {
     if (_loading) return;
     setState(() => _loading = true);
+    final myEpoch = _epoch;
     try {
       final vpn = await VpnTunnel.status();
       if (vpn != VpnTunnelStatus.connected) {
@@ -68,7 +72,9 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
       }
       final responseStatus = switch (_filter) {
         DnsFilter.blocked => '&response_status=blocked',
-        DnsFilter.allowed => '&response_status=whitelisted',
+        // 'processed' = all queries that were resolved (not blocked):
+        // includes NotFilteredNotFound, NotFilteredWhiteList, Rewrite, etc.
+        DnsFilter.allowed => '&response_status=processed',
         DnsFilter.all => '',
       };
       url += responseStatus;
@@ -79,7 +85,9 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
         url,
       ]).timeout(const Duration(seconds: 12));
 
-      if (result.exitCode != 0 || !mounted) return;
+      // Discard result if a newer refresh has started
+      if (myEpoch != _epoch || !mounted) return;
+      if (result.exitCode != 0) return;
       final body = (result.stdout as String).trim();
       if (body.isEmpty) return;
 
@@ -98,15 +106,18 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
     } catch (e) {
       appLogger.warn('DNS', 'Query log load eșuat: $e');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && myEpoch == _epoch) setState(() => _loading = false);
     }
   }
 
-  void _refresh() {
+  Future<void> _refresh() async {
+    // Cancel any in-flight load by bumping the epoch, then reset state.
+    _epoch++;
     setState(() {
       _entries.clear();
       _oldest = null;
       _hasMore = true;
+      _loading = false; // allow _loadMore to proceed immediately
     });
     unawaited(_loadMore());
   }
@@ -115,13 +126,14 @@ class _DnsLogScreenState extends State<DnsLogScreen> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
       _search = value.trim();
-      _refresh();
+      unawaited(_refresh());
     });
   }
 
   void _onFilterChanged(DnsFilter f) {
+    if (_filter == f) return;
     _filter = f;
-    _refresh();
+    unawaited(_refresh());
   }
 
   void _showDetail(Map<String, dynamic> entry) {
