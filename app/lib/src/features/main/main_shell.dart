@@ -174,7 +174,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      const ConnectionScreen(),
+      ConnectionScreen(vpnStatus: _tunnelStatus),
       PeersScreen(client: widget.client),
       BandwidthScreen(client: widget.client),
       const AdGuardScreen(),
