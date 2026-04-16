@@ -30,9 +30,10 @@ class ConnectionRecord {
   factory ConnectionRecord.fromJson(Map<String, dynamic> json) {
     return ConnectionRecord(
       timestamp: DateTime.parse(json['timestamp'] as String),
-      event: json['event'] == 'connected'
-          ? ConnectionEvent.connected
-          : ConnectionEvent.disconnected,
+      event: ConnectionEvent.values.firstWhere(
+        (e) => e.name == json['event'],
+        orElse: () => ConnectionEvent.disconnected,
+      ),
       durationSeconds: json['duration_seconds'] as int?,
     );
   }
@@ -75,8 +76,10 @@ class ConnectionHistory {
 
   Future<void> _save() async {
     final file = await _file();
+    final tmp = File('\${file.path}.tmp');
     final json = _records.map((r) => r.toJson()).toList();
-    await file.writeAsString(jsonEncode(json), flush: true);
+    await tmp.writeAsString(jsonEncode(json), flush: true);
+    await tmp.rename(file.path);
   }
 
   Future<void> recordConnect() async {
