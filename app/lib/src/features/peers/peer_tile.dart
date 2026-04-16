@@ -31,8 +31,8 @@ DeviceType detectDevice(String name) {
   if (lower.contains('phone') || lower.contains('mobile') || lower.contains('handy')) {
     return DeviceType.unknown;
   }
-  if (lower.contains('laptop') || lower.contains('notebook') || lower.contains('desktop') ||
-      lower.contains('pc') || lower.contains('workstation')) {
+  // Word-boundary check for short tokens to avoid false positives
+  if (RegExp(r'\b(laptop|notebook|desktop|pc|workstation)\b').hasMatch(lower)) {
     return DeviceType.unknown;
   }
   return DeviceType.unknown;
