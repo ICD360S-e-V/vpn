@@ -19,6 +19,13 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.31.1](https://github.com/ICD360S-e-V/vpn/compare/v1.31.0...v1.31.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* remove unused dart:io import in speed_test_db ([e424233](https://github.com/ICD360S-e-V/vpn/commit/e424233ab0665426e8731e34635791a96c4a3230))
+
 ## [1.31.0](https://github.com/ICD360S-e-V/vpn/compare/v1.30.0...v1.31.0) (2026-04-16)
 
 
