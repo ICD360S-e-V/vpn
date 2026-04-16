@@ -19,6 +19,14 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.30.0](https://github.com/ICD360S-e-V/vpn/compare/v1.29.0...v1.30.0) (2026-04-16)
+
+
+### Features
+
+* detect connection type via connectivity_plus ([fc3c789](https://github.com/ICD360S-e-V/vpn/commit/fc3c78937179ce45186970b83f9f13c2968d4db5))
+* SQLite persistence for speed test history ([d3435c5](https://github.com/ICD360S-e-V/vpn/commit/d3435c57ee3a4bb3dd6b91d67038cfa06a640f22))
+
 ## [1.29.0](https://github.com/ICD360S-e-V/vpn/compare/v1.28.3...v1.29.0) (2026-04-14)
 
 
