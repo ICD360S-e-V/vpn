@@ -3,7 +3,6 @@
 // SQLite persistence for speed test history. Uses sqflite_common_ffi
 // so it works on all desktop platforms (macOS, Linux, Windows).
 
-import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
