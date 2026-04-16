@@ -1,15 +1,19 @@
 // ICD360SVPN — lib/src/features/speedtest/speed_test_screen.dart
 //
-// VPN speed test — measures download speed through the WireGuard
-// tunnel by fetching test files from vpn.icd360s.de via curl.
-// Shows result in Mbps with a progress indicator during the test.
+// VPN speed test — measures download/upload speed and ping through
+// the WireGuard tunnel. Results persisted to SQLite. Auto-runs
+// every 5 minutes when enabled. Records connection type
+// (WiFi / Ethernet / Cellular) for ISP-quality evidence.
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 import '../../api/app_logger.dart';
+import '../../api/network_info.dart';
+import '../../api/speed_test_db.dart';
 import '../../api/vpn_tunnel.dart';
 import '../../common/needs_vpn_view.dart';
 
@@ -23,18 +27,64 @@ class SpeedTestScreen extends StatefulWidget {
 class _SpeedTestScreenState extends State<SpeedTestScreen> {
   bool _testing = false;
   bool _needsVpn = false;
+  bool _autoRun = false;
   double? _downloadMbps;
   double? _uploadMbps;
   double? _pingMs;
   String _status = '';
-  final List<_SpeedResult> _history = <_SpeedResult>[];
+  String? _connectionType;
+  List<SpeedTestRecord> _history = <SpeedTestRecord>[];
+  Timer? _autoTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadHistory());
+    unawaited(_detectType());
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _detectType() async {
+    final type = await NetworkInfo.instance.detectType();
+    if (mounted) setState(() => _connectionType = type);
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final records = await SpeedTestDb.instance.loadRecent(limit: 50);
+      if (mounted) setState(() => _history = records);
+    } catch (e) {
+      appLogger.warn('SPEED', 'Load history eșuat: $e');
+    }
+  }
+
+  void _toggleAutoRun() {
+    setState(() => _autoRun = !_autoRun);
+    if (_autoRun) {
+      _autoTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+        if (!_testing) unawaited(_runTest());
+      });
+      appLogger.info('SPEED', 'Auto-test activat (5 min)');
+    } else {
+      _autoTimer?.cancel();
+      appLogger.info('SPEED', 'Auto-test dezactivat');
+    }
+  }
 
   Future<void> _runTest() async {
     final vpn = await VpnTunnel.status();
     if (vpn != VpnTunnelStatus.connected) {
-      setState(() => _needsVpn = true);
+      if (mounted) setState(() => _needsVpn = true);
       return;
     }
+
+    if (!mounted) return;
+    await _detectType();
 
     setState(() {
       _testing = true;
@@ -46,51 +96,55 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     });
 
     try {
-      // Phase 1: Ping (latency)
       final ping = await _measurePing();
       if (!mounted) return;
       setState(() {
         _pingMs = ping;
-        _status = 'Download (1 MB)…';
+        _status = 'Warmup download (1 MB)…';
       });
 
-      // Phase 2: Download 1MB warmup
-      await _measureDownload('https://vpn.icd360s.de/download/speedtest-1mb.bin', 1.0);
+      await _measureDownload('https://vpn.icd360s.de/download/speedtest-1mb.bin');
       if (!mounted) return;
       setState(() => _status = 'Download (10 MB)…');
 
-      // Phase 3: Download 10MB main test
       final dlSpeed = await _measureDownload(
         'https://vpn.icd360s.de/download/speedtest-10mb.bin',
-        10.0,
       );
       if (!mounted) return;
       setState(() {
         _downloadMbps = dlSpeed;
-        _status = 'Upload…';
+        _status = 'Upload (1 MB)…';
       });
 
-      // Phase 4: Upload test (POST 1MB of data)
       final ulSpeed = await _measureUpload();
       if (!mounted) return;
 
-      final result = _SpeedResult(
+      final record = SpeedTestRecord(
         timestamp: DateTime.now(),
         downloadMbps: dlSpeed ?? 0,
         uploadMbps: ulSpeed ?? 0,
         pingMs: ping ?? 0,
+        connectionType: _connectionType ?? 'Unknown',
       );
+
+      // Persist to SQLite
+      try {
+        await SpeedTestDb.instance.insert(record);
+      } catch (e) {
+        appLogger.warn('SPEED', 'SQLite insert eșuat: $e');
+      }
 
       setState(() {
         _uploadMbps = ulSpeed;
         _status = 'Gata';
-        _history.insert(0, result);
+        _history = <SpeedTestRecord>[record, ..._history.take(49)];
       });
 
       appLogger.info('SPEED',
         'Ping: ${ping?.toStringAsFixed(0)}ms  '
         'DL: ${dlSpeed?.toStringAsFixed(1)} Mbps  '
-        'UL: ${ulSpeed?.toStringAsFixed(1)} Mbps',
+        'UL: ${ulSpeed?.toStringAsFixed(1)} Mbps  '
+        '[${_connectionType ?? "?"}]',
       );
     } catch (e) {
       appLogger.error('SPEED', 'Test eșuat: $e');
@@ -104,61 +158,53 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
   Future<double?> _measurePing() async {
     try {
-      final sw = Stopwatch()..start();
       final result = await Process.run('/usr/bin/curl', <String>[
         '-s', '-o', '/dev/null', '--connect-timeout', '5',
-        '-w', '%{time_connect}',
+        '--no-keepalive',
+        '-w', '%{time_starttransfer}',
         'https://vpn.icd360s.de/',
       ]).timeout(const Duration(seconds: 8));
-      sw.stop();
-
       if (result.exitCode == 0) {
-        final connectTime = double.tryParse((result.stdout as String).trim());
-        if (connectTime != null) return connectTime * 1000; // seconds → ms
+        final t = double.tryParse((result.stdout as String).trim());
+        if (t != null && t > 0) return t * 1000;
       }
-      return sw.elapsedMilliseconds.toDouble();
-    } catch (_) {
-      return null;
-    }
+    } catch (_) {}
+    return null;
   }
 
-  Future<double?> _measureDownload(String url, double sizeMb) async {
+  Future<double?> _measureDownload(String url) async {
     try {
       final result = await Process.run('/usr/bin/curl', <String>[
         '-s', '-o', '/dev/null', '--connect-timeout', '10', '--max-time', '30',
         '-w', '%{speed_download}',
         url,
       ]).timeout(const Duration(seconds: 35));
-
       if (result.exitCode != 0) return null;
       final bytesPerSec = double.tryParse((result.stdout as String).trim());
       if (bytesPerSec == null) return null;
-      return (bytesPerSec * 8) / 1000000; // bytes/s → Mbps
+      return (bytesPerSec * 8) / 1000000;
     } catch (_) {
       return null;
     }
   }
 
   Future<double?> _measureUpload() async {
+    final tmpPath = '${Directory.systemTemp.path}/icd360s_speedtest_${DateTime.now().millisecondsSinceEpoch}.bin';
     try {
-      // Generate a 1MB temp file for upload measurement
-      const tmpFile = '/tmp/icd360s_speedtest_upload.bin';
-      await Process.run('dd', <String>[
-        'if=/dev/urandom', 'of=$tmpFile', 'bs=1048576', 'count=1',
-      ]);
+      // Generate exactly 1 MB in Dart — no shell, no /dev/urandom
+      final rnd = Random();
+      final bytes = List<int>.generate(1048576, (_) => rnd.nextInt(256));
+      await File(tmpPath).writeAsBytes(bytes, flush: true);
 
-      // Upload the bounded file and measure speed
       final result = await Process.run('/usr/bin/curl', <String>[
         '-s', '-o', '/dev/null', '--connect-timeout', '10', '--max-time', '30',
+        '--http1.1', // force HTTP/1.1 so upload throughput is measurable
         '-X', 'POST',
         '-H', 'Content-Type: application/octet-stream',
-        '--data-binary', '@$tmpFile',
+        '--data-binary', '@$tmpPath',
         '-w', '%{speed_upload}',
-        'https://vpn.icd360s.de/',
+        'https://vpn.icd360s.de/speedtest-upload',
       ]).timeout(const Duration(seconds: 35));
-
-      // Clean up
-      try { await File(tmpFile).delete(); } catch (_) {}
 
       if (result.exitCode != 0) return null;
       final bytesPerSec = double.tryParse((result.stdout as String).trim());
@@ -166,7 +212,20 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       return (bytesPerSec * 8) / 1000000;
     } catch (_) {
       return null;
+    } finally {
+      try { await File(tmpPath).delete(); } catch (_) {}
     }
+  }
+
+  IconData _iconForType(String type) {
+    return switch (type) {
+      'WiFi' => Icons.wifi,
+      'Ethernet' => Icons.settings_ethernet,
+      'Cellular' => Icons.signal_cellular_4_bar,
+      'VPN' => Icons.vpn_lock,
+      'Offline' => Icons.signal_wifi_off,
+      _ => Icons.network_check,
+    };
   }
 
   @override
@@ -180,6 +239,29 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
+        // Connection type chip + auto-run toggle
+        Row(
+          children: <Widget>[
+            Chip(
+              avatar: Icon(_iconForType(_connectionType ?? ''), size: 16),
+              label: Text(_connectionType ?? 'Detectare…'),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+            const Spacer(),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text('Auto (5 min)', style: TextStyle(fontSize: 12)),
+                Switch(
+                  value: _autoRun,
+                  onChanged: (_) => _toggleAutoRun(),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
         // Main speed display
         Card(
           child: Padding(
@@ -190,15 +272,14 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                   Column(
                     children: <Widget>[
                       const SizedBox(
-                        width: 80,
-                        height: 80,
+                        width: 80, height: 80,
                         child: CircularProgressIndicator(strokeWidth: 6),
                       ),
                       const SizedBox(height: 16),
                       Text(_status, style: theme.textTheme.bodyMedium),
                     ],
                   )
-                else if (_downloadMbps != null) ...<Widget>[
+                else if (_downloadMbps != null)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: <Widget>[
@@ -222,8 +303,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                         color: Colors.orange,
                       ),
                     ],
-                  ),
-                ] else
+                  )
+                else
                   Column(
                     children: <Widget>[
                       Icon(Icons.speed, size: 64, color: theme.colorScheme.outline),
@@ -248,23 +329,53 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
         // History
         if (_history.isNotEmpty) ...<Widget>[
           const SizedBox(height: 16),
-          Text('Istoric', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              Text('Istoric (${_history.length})', style: theme.textTheme.titleSmall),
+              const Spacer(),
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Șterge'),
+                onPressed: _history.isEmpty ? null : () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Ștergi istoricul?'),
+                      content: const Text('Toate testele salvate vor fi pierdute.'),
+                      actions: <Widget>[
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anulează')),
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Șterge'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    await SpeedTestDb.instance.clear();
+                    await _loadHistory();
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           ..._history.map((r) {
             final t = r.timestamp.toLocal();
-            final time =
-                '${t.hour.toString().padLeft(2, '0')}:'
-                '${t.minute.toString().padLeft(2, '0')}';
+            final dateStr = '${t.day.toString().padLeft(2, '0')}.${t.month.toString().padLeft(2, '0')} '
+                '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
             return ListTile(
               dense: true,
-              leading: const Icon(Icons.history, size: 18),
+              visualDensity: VisualDensity.compact,
+              leading: Icon(_iconForType(r.connectionType), size: 18),
               title: Text(
                 '↓ ${r.downloadMbps.toStringAsFixed(1)} Mbps  '
                 '↑ ${r.uploadMbps.toStringAsFixed(1)} Mbps  '
                 '⏱ ${r.pingMs.toStringAsFixed(0)}ms',
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               ),
-              trailing: Text(time, style: const TextStyle(fontSize: 11)),
+              subtitle: Text('$dateStr  •  ${r.connectionType}', style: const TextStyle(fontSize: 10)),
             );
           }),
         ],
@@ -307,17 +418,4 @@ class _SpeedGauge extends StatelessWidget {
       ],
     );
   }
-}
-
-class _SpeedResult {
-  const _SpeedResult({
-    required this.timestamp,
-    required this.downloadMbps,
-    required this.uploadMbps,
-    required this.pingMs,
-  });
-  final DateTime timestamp;
-  final double downloadMbps;
-  final double uploadMbps;
-  final double pingMs;
 }
