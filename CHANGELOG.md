@@ -19,6 +19,20 @@ is discouraged — it will be overwritten the next time release-please
 opens a release PR. Historical sections below v1.1.0 are preserved
 verbatim from the manual era.
 
+## [1.31.0](https://github.com/ICD360S-e-V/vpn/compare/v1.30.0...v1.31.0) (2026-04-16)
+
+
+### Features
+
+* speed test v2 — SQLite history + connection type + auto-run ([37fb12c](https://github.com/ICD360S-e-V/vpn/commit/37fb12c09f328465ece6bd71de6e8a3cfeb636b3))
+
+
+### Bug Fixes
+
+* atomic save + robust event parsing for connection history ([bb121a8](https://github.com/ICD360S-e-V/vpn/commit/bb121a81869e442460ddcb575e17b519cbf89b53))
+* auto-refresh connection history every 10s ([f87686a](https://github.com/ICD360S-e-V/vpn/commit/f87686a6dd9891bccc594b913a5db50b90dcc7c1))
+* peer tile device detection — word boundaries ([46f968d](https://github.com/ICD360S-e-V/vpn/commit/46f968dddb9a6090b384b253f9ae003268c31fd7))
+
 ## [1.30.0](https://github.com/ICD360S-e-V/vpn/compare/v1.29.0...v1.30.0) (2026-04-16)
 
 
