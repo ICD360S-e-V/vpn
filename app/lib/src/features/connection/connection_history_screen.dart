@@ -19,11 +19,22 @@ class ConnectionHistoryScreen extends StatefulWidget {
 class _ConnectionHistoryScreenState extends State<ConnectionHistoryScreen> {
   List<ConnectionRecord> _records = <ConnectionRecord>[];
   bool _loading = true;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+    _timer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => unawaited(_load()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
