@@ -43,6 +43,14 @@ dependencies:
   # System notifications for VPN status changes and peer events.
   flutter_local_notifications: ^18.0.0
 
+  # Local SQLite database for speed test history persistence.
+  # sqflite_common_ffi works on all desktop platforms (macOS, Linux, Windows).
+  sqflite_common_ffi: ^2.4.0
+  path: ^1.9.0
+
+  # Detect connection type (WiFi / Ethernet / Cellular) for speed test logs.
+  connectivity_plus: ^7.1.1
+
   # Crypto for SHA256 verification of the downloaded DMG before we
   # ask Finder to open it.
   crypto: ^3.0.6
