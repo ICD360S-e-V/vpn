@@ -41,7 +41,7 @@ dependencies:
   path_provider: ^2.1.5
 
   # System notifications for VPN status changes and peer events.
-  flutter_local_notifications: ^18.0.0
+  flutter_local_notifications: ^21.0.0
 
   # Local SQLite database for speed test history persistence.
   # sqflite_common_ffi works on all desktop platforms (macOS, Linux, Windows).
