@@ -70,7 +70,7 @@ jobs:
       - name: Generate SLSA build provenance attestation
         # Cryptographic supply-chain proof for the agent binary.
         # Verify with: gh attestation verify vpn-agent --owner ICD360S-e-V
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: agent/vpn-agent
 

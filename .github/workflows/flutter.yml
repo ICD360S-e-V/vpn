@@ -608,7 +608,7 @@ jobs:
         # workflow shipping a tampered binary. The attestation
         # ties the binary to a specific clean source commit; any
         # mismatch fails verification.
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             out/download/vpn-management_icd360sev/linux/*
